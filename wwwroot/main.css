@@ -53,3 +53,156 @@ body, html {
     flex: 0 1 auto;
     min-width: 2em;
 }
+.model-select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: #333;
+  transition: 0.2s ease;
+  margin-right: 10px;
+}
+
+#refreshModels {
+  background: rgba(255,255,255,0.7);
+  color: #007bff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+#refreshModels:hover {
+  background: #007bff;
+  color: white;
+}
+
+
+.model-select:hover {
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+.model-select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+/* === HEADER ALIGNMENT === */
+header.glass {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 32px;
+}
+
+header .actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* === MODERN BUTTONS === */
+.modern-btn {
+  background: linear-gradient(135deg, #007bff, #009dff);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.25s ease;
+}
+
+.modern-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 123, 255, 0.25);
+}
+
+.play-btn {
+  background: linear-gradient(135deg, #00b894, #00cec9);
+}
+
+/* === LOADING OVERLAY === */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-box {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  padding: 30px 50px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.loading-text {
+  font-family: "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #007bff;
+  margin-bottom: 16px;
+}
+
+.progress-container {
+  width: 240px;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #007bff, #00a8ff);
+  transition: width 0.4s ease;
+}
+
+.progress-percent {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #444;
+  font-weight: 500;
+}
+
+/* === VIEWER SIZING === */
+#viewer {
+  position: absolute;
+  top: 70px;            /* below the header */
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 140px); /* leaves space for header (70px) + timeline (70px) */
+  background: #f8f9fa;
+  overflow: hidden;
+}
+
+/* Ensure body doesn't scroll */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;     /* prevent scrollbars */
+  height: 100%;
+}
+
+#globalOverlay {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+}
+

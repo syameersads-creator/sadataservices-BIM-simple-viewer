@@ -1,28 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <link
+      rel="icon"
+      type="image/x-icon"
+      href="https://cdn.autodesk.io/favicon.ico"
+    />
+    <link
+      rel="stylesheet"
+      href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.css"
+    />
+    <link rel="stylesheet" href="/main.css" />
+    <title>S&A 4D Viewer</title>
+  </head>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <link rel="icon" type="image/x-icon" href="https://cdn.autodesk.io/favicon.ico">
-    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.css">
-    <link rel="stylesheet" href="/main.css">
-    <title>Autodesk Platform Services: Simple Viewer</title>
-</head>
+  <body>
+    <!-- ✅ HEADER (moved inside <body>) -->
+    <header class="glass">
+  <div class="logo">S&A 4D Viewer</div>
 
-<body>
-    <div id="header">
-        <img class="logo" src="https://cdn.autodesk.io/logo/black/stacked.png" alt="Autodesk Platform Services">
-        <span class="title">Simple Viewer</span>
-        <select name="models" id="models"></select>
-        <button id="upload" title="Upload New Model">Upload</button>
-        <input style="display: none" type="file" id="input">
+  <!-- ✅ Controls on the right -->
+<div class="actions">
+    <select id="modelSelect" class="model-select">
+        <option value="">Select Model</option>
+    </select>
+
+    <button id="refreshModels" title="Refresh List">⟳</button>
+    <button class="modern-btn" id="uploadModelBtn">Upload Model</button>
+    <button class="modern-btn" id="uploadScheduleBtn">Upload Schedule</button>
+    <button class="modern-btn play-btn" id="playBtn">▶ Play 4D</button>
     </div>
-    <div id="preview"></div>
-    <div id="overlay"></div>
-    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.js"></script>
-    <script src="/main.js" type="module"></script>
-</body>
+    </header>
+    
+    <!-- ✅ UNIVERSAL PROGRESS OVERLAY -->
+    <div id="globalOverlay" class="loading-overlay">
+        <div class="loading-box">
+            <div id="overlayTitle" class="loading-text">Loading...</div>
+            <div class="progress-container">
+                <div id="overlayBar" class="progress-bar"></div>
+            </div>
+            <div id="overlayPercent" class="progress-percent">0%</div>
+        </div>
+    </div>
+    
+    
+    
+    <!-- ✅ VIEWER CANVAS -->
+    <div id="viewer" class="viewer"></div>
+    
+    <!-- ✅ HIDDEN INPUTS -->
+    <input type="file" id="fileInput" style="display: none" />
+    <input type="file" id="scheduleInput" style="display: none" />
+    
+    <!-- ✅ TIMELINE SLIDER -->
+    <div id="timeline">
+        <input type="range" id="timeSlider" min="0" max="100" value="0" />
+    </div>
 
+    <!-- ✅ VIEWER SCRIPT (must load before main.js) -->
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+
+    <!-- ✅ CUSTOM SCRIPTS -->
+    <script src="/extensions/FourDPlayback.js"></script>
+    <script src="/viewer.js"></script>
+    <script src="/schedule.js"></script>
+    <script src="/main.js"></script>
+  </body>
 </html>

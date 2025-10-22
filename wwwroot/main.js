@@ -1,108 +1,237 @@
-import { initViewer, loadModel } from './viewer.js';
+// === S&A 4D Viewer Main Script ===
 
-initViewer(document.getElementById('preview')).then(viewer => {
-    const urn = window.location.hash?.substring(1);
-    setupModelSelection(viewer, urn);
-    setupModelUpload(viewer);
-});
+// Initialize Viewer
+let viewer;
+let currentUrn = null;
+let schedule = null;
+let fourdExt = null;
 
-async function setupModelSelection(viewer, selectedUrn) {
-    const dropdown = document.getElementById('models');
-    dropdown.innerHTML = '';
-    try {
-        const resp = await fetch('/api/models');
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-        const models = await resp.json();
-        dropdown.innerHTML = models.map(model => `<option value=${model.urn} ${model.urn === selectedUrn ? 'selected' : ''}>${model.name}</option>`).join('\n');
-        dropdown.onchange = () => onModelSelected(viewer, dropdown.value);
-        if (dropdown.value) {
-            onModelSelected(viewer, dropdown.value);
-        }
-    } catch (err) {
-        alert('Could not list models. See the console for more details.');
-        console.error(err);
-    }
+// Utility toast overlay (small top-right messages)
+function showOverlay(msg, duration = 2000) {
+  let overlay = document.getElementById("overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "overlay";
+    overlay.style.position = "fixed";
+    overlay.style.top = "20px";
+    overlay.style.right = "20px";
+    overlay.style.background = "rgba(0,0,0,0.7)";
+    overlay.style.color = "#fff";
+    overlay.style.padding = "10px 20px";
+    overlay.style.borderRadius = "8px";
+    overlay.style.zIndex = "999";
+    document.body.appendChild(overlay);
+  }
+  overlay.innerText = msg;
+  overlay.style.display = "block";
+  setTimeout(() => (overlay.style.display = "none"), duration);
 }
 
-async function setupModelUpload(viewer) {
-    const upload = document.getElementById('upload');
-    const input = document.getElementById('input');
-    const models = document.getElementById('models');
-    upload.onclick = () => input.click();
-    input.onchange = async () => {
-        const file = input.files[0];
-        let data = new FormData();
-        data.append('model-file', file);
-        if (file.name.endsWith('.zip')) { // When uploading a zip file, ask for the main design file in the archive
-            const entrypoint = window.prompt('Please enter the filename of the main design inside the archive.');
-            data.append('model-zip-entrypoint', entrypoint);
-        }
-        upload.setAttribute('disabled', 'true');
-        models.setAttribute('disabled', 'true');
-        showNotification(`Uploading model <em>${file.name}</em>. Do not reload the page.`);
-        try {
-            const resp = await fetch('/api/models', { method: 'POST', body: data });
-            if (!resp.ok) {
-                throw new Error(await resp.text());
-            }
-            const model = await resp.json();
-            setupModelSelection(viewer, model.urn);
-        } catch (err) {
-            alert(`Could not upload model ${file.name}. See the console for more details.`);
+// === GLOBAL OVERLAY CONTROLS ===
+function showGlobalOverlay(title = "Loading...", startPercent = 0) {
+  const overlay = document.getElementById("globalOverlay");
+  const bar = document.getElementById("overlayBar");
+  const text = document.getElementById("overlayTitle");
+  const percent = document.getElementById("overlayPercent");
+  overlay.style.display = "flex";
+  text.textContent = title;
+  bar.style.width = `${startPercent}%`;
+  percent.textContent = `${startPercent}%`;
+}
+
+function updateGlobalProgress(progress, text = null) {
+  const bar = document.getElementById("overlayBar");
+  const title = document.getElementById("overlayTitle");
+  const percent = document.getElementById("overlayPercent");
+  if (text) title.textContent = text;
+  bar.style.width = `${progress}%`;
+  percent.textContent = `${Math.floor(progress)}%`;
+}
+
+function hideGlobalOverlay(delay = 800) {
+  setTimeout(() => {
+    document.getElementById("globalOverlay").style.display = "none";
+  }, delay);
+}
+
+// === MODEL DROPDOWN POPULATION ===
+async function loadModelList() {
+  const select = document.getElementById("modelSelect");
+  select.innerHTML = '<option value="">Select Model</option>';
+
+  const res = await fetch("/api/models");
+  if (!res.ok) return console.warn("⚠️ Failed to fetch models list");
+
+  const models = await res.json();
+  models.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.urn;
+    opt.textContent = m.name;
+    select.appendChild(opt);
+  });
+}
+
+// When dropdown changes, load selected model
+document.getElementById("modelSelect").onchange = (e) => {
+  const urn = e.target.value;
+  if (urn) {
+    showGlobalOverlay("Loading selected model...", 0);
+    initViewer(urn);
+  }
+};
+
+// Call once on page load
+window.addEventListener("DOMContentLoaded", loadModelList);
+document.getElementById("refreshModels").onclick = loadModelList;
+
+// ================================
+// Initialize Autodesk Viewer
+async function initViewer(urn) {
+  const tokenResponse = await fetch("/api/auth/token");
+  const token = await tokenResponse.json();
+
+  const options = {
+    env: "AutodeskProduction",
+    api: "derivativeV2",
+    getAccessToken: (onTokenReady) => {
+      onTokenReady(token.access_token, token.expires_in);
+    },
+  };
+
+  Autodesk.Viewing.Initializer(options, async () => {
+    const container = document.getElementById("viewer");
+    viewer = new Autodesk.Viewing.GuiViewer3D(container);
+    viewer.start();
+    window.myViewer = viewer;
+
+    Autodesk.Viewing.Document.load(
+      "urn:" + urn,
+      (doc) => {
+        const defaultModel = doc.getRoot().getDefaultGeometry();
+        showGlobalOverlay("Loading model geometry...", 0);
+
+        const modelPromise = viewer.loadDocumentNode(doc, defaultModel);
+        modelPromise
+          .then((model) => {
+            model.addEventListener(
+              Autodesk.Viewing.PROGRESS_UPDATE_EVENT,
+              (e) => {
+                const pct = Math.floor((e.loaded / e.total) * 100);
+                updateGlobalProgress(pct);
+              }
+            );
+            viewer.addEventListener(
+              Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
+              () => {
+                updateGlobalProgress(100, "Model loaded successfully!");
+                hideGlobalOverlay();
+              }
+            );
+          })
+          .catch((err) => {
             console.error(err);
-        } finally {
-            clearNotification();
-            upload.removeAttribute('disabled');
-            models.removeAttribute('disabled');
-            input.value = '';
-        }
-    };
-}
-
-async function onModelSelected(viewer, urn) {
-    if (window.onModelSelectedTimeout) {
-        clearTimeout(window.onModelSelectedTimeout);
-        delete window.onModelSelectedTimeout;
-    }
-    window.location.hash = urn;
-    try {
-        const resp = await fetch(`/api/models/${urn}/status`);
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-        const status = await resp.json();
-        switch (status.status) {
-            case 'n/a':
-                showNotification(`Model has not been translated.`);
-                break;
-            case 'inprogress':
-                showNotification(`Model is being translated (${status.progress})...`);
-                window.onModelSelectedTimeout = setTimeout(onModelSelected, 5000, viewer, urn);
-                break;
-            case 'failed':
-                showNotification(`Translation failed. <ul>${status.messages.map(msg => `<li>${JSON.stringify(msg)}</li>`).join('')}</ul>`);
-                break;
-            default:
-                clearNotification();
-                loadModel(viewer, urn);
-                break; 
-        }
-    } catch (err) {
-        alert('Could not load model. See the console for more details.');
+            hideGlobalOverlay();
+            showOverlay("Error loading model");
+          });
+      },
+      (err) => {
         console.error(err);
+        hideGlobalOverlay();
+        showOverlay("Error loading document");
+      }
+    );
+  });
+}
+
+// === UPLOAD MODEL (UNIFIED OVERLAY) ===
+document.getElementById("uploadModelBtn").onclick = () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".rvt,.zip,.nwd";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showGlobalOverlay("Uploading model...", 0);
+    let fakeProgress = 0;
+    const simulate = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + Math.random() * 10, 90);
+      updateGlobalProgress(fakeProgress);
+    }, 300);
+
+    const form = new FormData();
+    form.append("model-file", file);
+    const resp = await fetch("/api/models", { method: "POST", body: form });
+    clearInterval(simulate);
+
+    if (!resp.ok) {
+      hideGlobalOverlay();
+      return showOverlay("Upload failed");
     }
+
+    const model = await resp.json();
+    updateGlobalProgress(90, "Translating model...");
+    pollTranslation(model.urn);
+  };
+  input.click();
+};
+
+async function pollTranslation(urn) {
+  const res = await fetch(`/api/models/${urn}/status`);
+  const data = await res.json();
+
+  if (data.status === "success") {
+    updateGlobalProgress(100, "Model ready — loading...");
+    setTimeout(() => initViewer(urn), 1000);
+  } else if (data.status === "inprogress") {
+    setTimeout(() => pollTranslation(urn), 3000);
+  } else {
+    hideGlobalOverlay();
+    showOverlay("Translation failed");
+  }
 }
 
-function showNotification(message) {
-    const overlay = document.getElementById('overlay');
-    overlay.innerHTML = `<div class="notification">${message}</div>`;
-    overlay.style.display = 'flex';
+// === SCHEDULE UPLOAD (UNIFIED OVERLAY) ===
+async function uploadSchedule(urn) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".csv";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showGlobalOverlay("Uploading schedule...", 10);
+
+    const form = new FormData();
+    form.append("schedule-file", file);
+    const resp = await fetch(`/api/schedule/${urn}`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!resp.ok) {
+      hideGlobalOverlay();
+      return showOverlay("Schedule upload failed");
+    }
+
+    const data = await resp.json();
+    updateGlobalProgress(100, `Schedule uploaded (${data.tasks.length} tasks)`);
+    hideGlobalOverlay();
+    schedule = data;
+    const viewerInstance = window.myViewer;
+    fourdExt = viewerInstance.getExtension("FourDPlayback");
+    fourdExt.initSchedule(schedule);
+  };
+  input.click();
 }
 
-function clearNotification() {
-    const overlay = document.getElementById('overlay');
-    overlay.innerHTML = '';
-    overlay.style.display = 'none';
-}
+// === 4D ENHANCEMENT HOOKS ===
+document.getElementById("uploadScheduleBtn").onclick = async () => {
+  if (!currentUrn) return alert("Load a model first.");
+  await uploadSchedule(currentUrn);
+};
+
+document.getElementById("playBtn").onclick = () => {
+  if (!fourdExt || !schedule) return alert("Upload schedule first");
+  fourdExt.play();
+};

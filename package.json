@@ -14,6 +14,7 @@
     "@aps_sdk/model-derivative": "^1.2.0",
     "@aps_sdk/oss": "^1.2.2",
     "@types/forge-viewer": "^7.99.1",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-formidable": "^1.2.0"
