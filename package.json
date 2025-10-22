@@ -1,0 +1,21 @@
+{
+  "name": "simple-viewer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aps_sdk/authentication": "^1.0.0",
+    "@aps_sdk/model-derivative": "^1.2.0",
+    "@aps_sdk/oss": "^1.2.2",
+    "@types/forge-viewer": "^7.99.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-formidable": "^1.2.0"
+  }
+}
