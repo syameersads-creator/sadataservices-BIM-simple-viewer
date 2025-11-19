@@ -609,25 +609,46 @@ function drawDependencyLines(criticalPath) {
 
 // Synchronize scrolling between Gantt header and body
 function setupGanttScrollSync() {
+  const ganttFixedColumns = document.querySelector('.gantt-fixed-columns');
   const ganttScrollableTimeline = document.querySelector('.gantt-scrollable-timeline');
-  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
   const ganttBodyFixed = document.querySelector('.gantt-body-fixed');
+  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
 
-  if (!ganttScrollableTimeline || !ganttBodyScrollable) return;
+  if (!ganttScrollableTimeline || !ganttBodyScrollable || !ganttFixedColumns || !ganttBodyFixed) return;
 
-  // Sync horizontal scroll between header and body
+  let isSyncingVertical = false;
+
+  // Sync horizontal scroll within fixed columns section (header <-> body)
+  ganttBodyFixed.addEventListener('scroll', (e) => {
+    ganttFixedColumns.scrollLeft = e.target.scrollLeft;
+
+    // Sync vertical scroll to timeline body (to keep rows aligned)
+    if (!isSyncingVertical) {
+      isSyncingVertical = true;
+      ganttBodyScrollable.scrollTop = e.target.scrollTop;
+      isSyncingVertical = false;
+    }
+  });
+
+  ganttFixedColumns.addEventListener('scroll', (e) => {
+    ganttBodyFixed.scrollLeft = e.target.scrollLeft;
+  });
+
+  // Sync horizontal scroll within timeline section (header <-> body)
   ganttBodyScrollable.addEventListener('scroll', (e) => {
-    // Sync horizontal scroll to header
+    // Sync horizontal scroll to timeline header
     ganttScrollableTimeline.scrollLeft = e.target.scrollLeft;
 
-    // Sync vertical scroll to fixed columns
-    if (ganttBodyFixed) {
+    // Sync vertical scroll to fixed columns body (to keep rows aligned)
+    if (!isSyncingVertical) {
+      isSyncingVertical = true;
       ganttBodyFixed.scrollTop = e.target.scrollTop;
+      isSyncingVertical = false;
     }
   });
 
   ganttScrollableTimeline.addEventListener('scroll', (e) => {
-    // Sync horizontal scroll to body
+    // Sync horizontal scroll to timeline body
     ganttBodyScrollable.scrollLeft = e.target.scrollLeft;
   });
 }

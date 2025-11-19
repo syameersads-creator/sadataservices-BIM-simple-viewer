@@ -1215,6 +1215,18 @@ html, body {
   grid-template-columns: 80px 200px 130px 130px 150px;
   flex-shrink: 0;
   border-right: 2px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 690px;
+}
+
+/* Hide scrollbar for header fixed columns */
+.gantt-fixed-columns::-webkit-scrollbar {
+  display: none;
+}
+.gantt-fixed-columns {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .gantt-scrollable-timeline {
@@ -1275,8 +1287,9 @@ html, body {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  width: 690px; /* 80 + 200 + 130 + 130 + 150 */
+  min-width: 690px; /* 80 + 200 + 130 + 130 + 150 */
   border-right: 2px solid var(--border);
+  overflow-x: auto;
   overflow-y: hidden;
 }
 
