@@ -118,6 +118,16 @@
             <input id="taskDependencies" type="text" class="modern-input" placeholder="e.g., 1, 2, 3" />
           </div>
 
+          <div class="form-group">
+            <label for="taskProgress">
+              <i class="fas fa-tasks"></i> % Complete
+            </label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <input id="taskProgress" type="range" min="0" max="100" value="0" class="progress-slider" style="flex: 1;" />
+              <span id="taskProgressValue" style="min-width: 45px; font-weight: 600; color: var(--primary);">0%</span>
+            </div>
+          </div>
+
           <div class="selection-info">
             <i class="fas fa-mouse-pointer"></i>
             <span>Selected objects: <strong id="selectedCount">0</strong></span>
@@ -207,11 +217,15 @@
           <div class="gantt-header">
             <!-- Fixed columns section -->
             <div class="gantt-fixed-columns">
-              <div class="gantt-columns-header">Task ID</div>
-              <div class="gantt-columns-header">Task Name</div>
-              <div class="gantt-columns-header">Planned Start</div>
-              <div class="gantt-columns-header">Planned End</div>
-              <div class="gantt-columns-header">Dependencies</div>
+              <div class="gantt-columns-header">Activity ID</div>
+              <div class="gantt-columns-header">Activity Name</div>
+              <div class="gantt-columns-header">Orig Dur</div>
+              <div class="gantt-columns-header">Rem Dur</div>
+              <div class="gantt-columns-header">% Comp</div>
+              <div class="gantt-columns-header">Start</div>
+              <div class="gantt-columns-header">Finish</div>
+              <div class="gantt-columns-header">Total Float</div>
+              <div class="gantt-columns-header">Predecessors</div>
             </div>
             <!-- Scrollable timeline section -->
             <div class="gantt-scrollable-timeline">

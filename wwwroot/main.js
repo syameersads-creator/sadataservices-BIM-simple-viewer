@@ -167,6 +167,9 @@ function openTaskModal(taskId = null) {
       document.getElementById("taskStart").value = task.start.toISOString().split('T')[0];
       document.getElementById("taskEnd").value = task.end.toISOString().split('T')[0];
       document.getElementById("taskDependencies").value = task.dependencies ? task.dependencies.join(', ') : '';
+      const progress = task.percentComplete || 0;
+      document.getElementById("taskProgress").value = progress;
+      document.getElementById("taskProgressValue").textContent = `${progress}%`;
 
       modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
       createBtnText.textContent = 'Save Changes';
@@ -195,7 +198,19 @@ function clearTaskForm() {
   document.getElementById("taskStart").value = "";
   document.getElementById("taskEnd").value = "";
   document.getElementById("taskDependencies").value = "";
+  document.getElementById("taskProgress").value = "0";
+  document.getElementById("taskProgressValue").textContent = "0%";
   if (viewer) viewer.clearSelection();
+}
+
+// Progress slider handler
+const progressSlider = document.getElementById("taskProgress");
+const progressValue = document.getElementById("taskProgressValue");
+
+if (progressSlider && progressValue) {
+  progressSlider.addEventListener('input', (e) => {
+    progressValue.textContent = `${e.target.value}%`;
+  });
 }
 
 addTaskFloatingBtn.onclick = () => openTaskModal();
@@ -251,7 +266,10 @@ createTaskBtn.onclick = () => {
     dependenciesStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) :
     [];
 
-  console.log('Form values:', { name, type, start, end, selected });
+  // Get P6 fields
+  const percentComplete = parseInt(document.getElementById("taskProgress").value) || 0;
+
+  console.log('Form values:', { name, type, start, end, selected, percentComplete });
   console.log('Editing task ID:', editingTaskId);
   console.log('Current taskList length BEFORE:', taskList.length);
 
@@ -270,6 +288,10 @@ createTaskBtn.onclick = () => {
     return;
   }
 
+  // Calculate durations
+  const durationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  const remainingDays = Math.ceil(durationDays * (1 - percentComplete / 100));
+
   if (editingTaskId) {
     console.log('EDIT MODE - Updating existing task');
     // Edit existing task
@@ -281,6 +303,9 @@ createTaskBtn.onclick = () => {
       task.start = startDate;
       task.end = endDate;
       task.dependencies = dependencies;
+      task.percentComplete = percentComplete;
+      task.originalDuration = durationDays;
+      task.remainingDuration = remainingDays;
       task.elements = selected.length > 0 ? selected : task.elements;
 
       console.log('Task updated:', task);
@@ -298,6 +323,9 @@ createTaskBtn.onclick = () => {
       start: startDate,
       end: endDate,
       dependencies: dependencies,
+      percentComplete: percentComplete,
+      originalDuration: durationDays,
+      remainingDuration: remainingDays,
       elements: selected
     };
 
@@ -438,41 +466,66 @@ function renderGanttChart() {
     rowFixed.style.animationDelay = `${index * 0.05}s`;
     rowFixed.dataset.taskId = task.id;
 
-    // Task ID column
+    // Activity ID column
     const taskIdCell = document.createElement("div");
     taskIdCell.className = "gantt-row-cell";
     taskIdCell.textContent = task.id;
 
-    // Task Name column
+    // Activity Name column
     const taskNameCell = document.createElement("div");
     taskNameCell.className = "gantt-row-cell";
     taskNameCell.style.justifyContent = "flex-start";
     taskNameCell.innerHTML = `
-      <span class="task-type-badge ${task.type.toLowerCase()}" style="margin-right: 8px;">${task.type === 'Build' ? '🏗️' : '💥'}</span>
-      <span style="font-weight: 500; color: var(--text-primary);">${task.name}</span>
+      <span class="task-type-badge ${task.type.toLowerCase()}" style="margin-right: 4px; font-size: 0.7rem;">${task.type === 'Build' ? '🏗️' : '💥'}</span>
+      <span style="font-weight: 500; color: #1F2937; font-size: 0.75rem;">${task.name}</span>
     `;
 
-    // Planned Start column
+    // Orig Dur column
+    const origDurCell = document.createElement("div");
+    origDurCell.className = "gantt-row-cell";
+    origDurCell.textContent = task.originalDuration || 0;
+
+    // Rem Dur column
+    const remDurCell = document.createElement("div");
+    remDurCell.className = "gantt-row-cell";
+    remDurCell.textContent = task.remainingDuration || 0;
+
+    // % Comp column
+    const pctCompCell = document.createElement("div");
+    pctCompCell.className = "gantt-row-cell";
+    pctCompCell.textContent = `${task.percentComplete || 0}%`;
+
+    // Start column
     const startCell = document.createElement("div");
     startCell.className = "gantt-row-cell";
-    startCell.textContent = task.start.toLocaleDateString();
+    startCell.textContent = task.start.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 
-    // Planned End column
-    const endCell = document.createElement("div");
-    endCell.className = "gantt-row-cell";
-    endCell.textContent = task.end.toLocaleDateString();
+    // Finish column
+    const finishCell = document.createElement("div");
+    finishCell.className = "gantt-row-cell";
+    finishCell.textContent = task.end.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 
-    // Dependencies column
-    const depsCell = document.createElement("div");
-    depsCell.className = "gantt-row-cell";
-    depsCell.textContent = task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : '-';
+    // Total Float column (simplified - 0 for critical, calculated for non-critical)
+    const totalFloatCell = document.createElement("div");
+    totalFloatCell.className = "gantt-row-cell";
+    const isCritical = criticalPath.includes(task.id);
+    totalFloatCell.textContent = isCritical ? '0' : '-';
+
+    // Predecessors column
+    const predsCell = document.createElement("div");
+    predsCell.className = "gantt-row-cell";
+    predsCell.textContent = task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : '-';
 
     // Append cells to fixed row
     rowFixed.appendChild(taskIdCell);
     rowFixed.appendChild(taskNameCell);
+    rowFixed.appendChild(origDurCell);
+    rowFixed.appendChild(remDurCell);
+    rowFixed.appendChild(pctCompCell);
     rowFixed.appendChild(startCell);
-    rowFixed.appendChild(endCell);
-    rowFixed.appendChild(depsCell);
+    rowFixed.appendChild(finishCell);
+    rowFixed.appendChild(totalFloatCell);
+    rowFixed.appendChild(predsCell);
 
     // Create timeline row
     const rowTimeline = document.createElement("div");
@@ -521,6 +574,14 @@ function renderGanttChart() {
     // Mark critical path tasks
     if (criticalPath.includes(task.id)) {
       bar.classList.add('critical');
+    }
+
+    // Add progress indicator
+    if (task.percentComplete && task.percentComplete > 0) {
+      const progressBar = document.createElement("div");
+      progressBar.className = "gantt-bar-progress";
+      progressBar.style.width = `${task.percentComplete}%`;
+      bar.appendChild(progressBar);
     }
 
     const barLabel = document.createElement("span");
@@ -600,10 +661,69 @@ function renderGanttChart() {
 }
 
 function drawDependencyLines(criticalPath) {
-  // No dependencies to draw anymore
   const svg = document.getElementById('ganttDependencyLines');
-  if (svg) {
-    svg.innerHTML = '';
+  if (!svg) return;
+
+  svg.innerHTML = '';
+
+  // Draw dependency arrows between tasks
+  taskList.forEach(task => {
+    if (!task.dependencies || task.dependencies.length === 0) return;
+
+    task.dependencies.forEach(predId => {
+      const predecessor = taskList.find(t => t.id === predId);
+      if (!predecessor) return;
+
+      // Find the bars for both tasks
+      const predBar = document.querySelector(`.gantt-bar[data-task-id="${predId}"]`);
+      const succBar = document.querySelector(`.gantt-bar[data-task-id="${task.id}"]`);
+
+      if (!predBar || !succBar) return;
+
+      // Get positions
+      const predRect = predBar.getBoundingClientRect();
+      const succRect = succBar.getBoundingClientRect();
+      const svgRect = svg.getBoundingClientRect();
+
+      // Calculate relative positions
+      const x1 = predRect.right - svgRect.left;
+      const y1 = predRect.top + predRect.height / 2 - svgRect.top;
+      const x2 = succRect.left - svgRect.left;
+      const y2 = succRect.top + succRect.height / 2 - svgRect.top;
+
+      // Create path with right angle connectors (P6 style)
+      const midX = (x1 + x2) / 2;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const pathData = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+
+      path.setAttribute('d', pathData);
+      path.setAttribute('stroke', criticalPath.includes(predId) && criticalPath.includes(task.id) ? '#DC2626' : '#6B7280');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('marker-end', 'url(#arrowhead)');
+
+      svg.appendChild(path);
+    });
+  });
+
+  // Add arrowhead marker definition if it doesn't exist
+  if (!svg.querySelector('defs')) {
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', 'arrowhead');
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3, 0 6');
+    polygon.setAttribute('fill', '#6B7280');
+
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
   }
 }
 
@@ -617,6 +737,16 @@ function setupGanttScrollSync() {
   if (!ganttScrollableTimeline || !ganttBodyScrollable || !ganttFixedColumns || !ganttBodyFixed) return;
 
   let isSyncingVertical = false;
+  let scrollTimeout;
+
+  // Debounced dependency redraw
+  const redrawDependenciesDebounced = () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      const criticalPath = calculateCriticalPath();
+      drawDependencyLines(criticalPath);
+    }, 100);
+  };
 
   // Sync horizontal scroll within fixed columns section (header <-> body)
   ganttBodyFixed.addEventListener('scroll', (e) => {
@@ -628,6 +758,8 @@ function setupGanttScrollSync() {
       ganttBodyScrollable.scrollTop = e.target.scrollTop;
       isSyncingVertical = false;
     }
+
+    redrawDependenciesDebounced();
   });
 
   ganttFixedColumns.addEventListener('scroll', (e) => {
@@ -645,6 +777,8 @@ function setupGanttScrollSync() {
       ganttBodyFixed.scrollTop = e.target.scrollTop;
       isSyncingVertical = false;
     }
+
+    redrawDependenciesDebounced();
   });
 
   ganttScrollableTimeline.addEventListener('scroll', (e) => {
