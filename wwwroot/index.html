@@ -205,15 +205,26 @@
         <!-- Gantt Chart View -->
         <div id="ganttView" class="gantt-container view-container active">
           <div class="gantt-header">
-            <div class="gantt-columns-header">Task ID</div>
-            <div class="gantt-columns-header">Task Name</div>
-            <div class="gantt-columns-header">Planned Start</div>
-            <div class="gantt-columns-header">Planned End</div>
-            <div class="gantt-columns-header">Dependencies</div>
-            <div class="gantt-timeline-header" id="ganttTimelineHeader"></div>
+            <!-- Fixed columns section -->
+            <div class="gantt-fixed-columns">
+              <div class="gantt-columns-header">Task ID</div>
+              <div class="gantt-columns-header">Task Name</div>
+              <div class="gantt-columns-header">Planned Start</div>
+              <div class="gantt-columns-header">Planned End</div>
+              <div class="gantt-columns-header">Dependencies</div>
+            </div>
+            <!-- Scrollable timeline section -->
+            <div class="gantt-scrollable-timeline">
+              <div class="gantt-timeline-header" id="ganttTimelineHeader"></div>
+            </div>
           </div>
-          <div class="gantt-body" id="ganttBody">
-            <svg id="ganttDependencyLines" class="gantt-dependency-svg"></svg>
+          <div class="gantt-body-wrapper">
+            <div class="gantt-body-fixed" id="ganttBodyFixed"></div>
+            <div class="gantt-body-scrollable">
+              <div id="ganttBody" class="gantt-body">
+                <svg id="ganttDependencyLines" class="gantt-dependency-svg"></svg>
+              </div>
+            </div>
           </div>
         </div>
       </section>

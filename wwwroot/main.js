@@ -366,21 +366,23 @@ function renderGanttChart() {
   console.log('renderGanttChart called. Tasks:', taskList.length);
 
   const ganttBody = document.getElementById("ganttBody");
+  const ganttBodyFixed = document.getElementById("ganttBodyFixed");
   const ganttHeader = document.getElementById("ganttTimelineHeader");
 
-  if (!ganttBody || !ganttHeader) {
+  if (!ganttBody || !ganttBodyFixed || !ganttHeader) {
     console.error('Gantt elements not found');
     return;
   }
 
-  // Clear existing content except SVG
+  // Clear existing content
   const svg = document.getElementById("ganttDependencyLines");
   ganttBody.innerHTML = "";
   if (svg) ganttBody.appendChild(svg);
+  ganttBodyFixed.innerHTML = "";
   ganttHeader.innerHTML = "";
 
   if (taskList.length === 0) {
-    ganttBody.innerHTML = `
+    ganttBodyFixed.innerHTML = `
       <div class="gantt-empty">
         <i class="fas fa-chart-gantt"></i>
         <p>No tasks created yet. Create your first task above!</p>
@@ -430,10 +432,11 @@ function renderGanttChart() {
 
   // Render tasks
   taskList.forEach((task, index) => {
-    const row = document.createElement("div");
-    row.className = "gantt-row";
-    row.style.animationDelay = `${index * 0.05}s`;
-    row.dataset.taskId = task.id;
+    // Create fixed columns row
+    const rowFixed = document.createElement("div");
+    rowFixed.className = "gantt-row-fixed";
+    rowFixed.style.animationDelay = `${index * 0.05}s`;
+    rowFixed.dataset.taskId = task.id;
 
     // Task ID column
     const taskIdCell = document.createElement("div");
@@ -464,7 +467,20 @@ function renderGanttChart() {
     depsCell.className = "gantt-row-cell";
     depsCell.textContent = task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : '-';
 
-    // Timeline column
+    // Append cells to fixed row
+    rowFixed.appendChild(taskIdCell);
+    rowFixed.appendChild(taskNameCell);
+    rowFixed.appendChild(startCell);
+    rowFixed.appendChild(endCell);
+    rowFixed.appendChild(depsCell);
+
+    // Create timeline row
+    const rowTimeline = document.createElement("div");
+    rowTimeline.className = "gantt-row-timeline";
+    rowTimeline.style.animationDelay = `${index * 0.05}s`;
+    rowTimeline.dataset.taskId = task.id;
+
+    // Timeline content
     const timelineDiv = document.createElement("div");
     timelineDiv.className = "gantt-timeline";
 
@@ -546,16 +562,11 @@ function renderGanttChart() {
     }
 
     timelineDiv.appendChild(timelineGrid);
+    rowTimeline.appendChild(timelineDiv);
 
-    // Append all cells to row
-    row.appendChild(taskIdCell);
-    row.appendChild(taskNameCell);
-    row.appendChild(startCell);
-    row.appendChild(endCell);
-    row.appendChild(depsCell);
-    row.appendChild(timelineDiv);
-
-    ganttBody.appendChild(row);
+    // Append rows to respective containers
+    ganttBodyFixed.appendChild(rowFixed);
+    ganttBody.appendChild(rowTimeline);
   });
 
   // Store gantt timeline data for playback
@@ -595,6 +606,36 @@ function drawDependencyLines(criticalPath) {
     svg.innerHTML = '';
   }
 }
+
+// Synchronize scrolling between Gantt header and body
+function setupGanttScrollSync() {
+  const ganttScrollableTimeline = document.querySelector('.gantt-scrollable-timeline');
+  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
+  const ganttBodyFixed = document.querySelector('.gantt-body-fixed');
+
+  if (!ganttScrollableTimeline || !ganttBodyScrollable) return;
+
+  // Sync horizontal scroll between header and body
+  ganttBodyScrollable.addEventListener('scroll', (e) => {
+    // Sync horizontal scroll to header
+    ganttScrollableTimeline.scrollLeft = e.target.scrollLeft;
+
+    // Sync vertical scroll to fixed columns
+    if (ganttBodyFixed) {
+      ganttBodyFixed.scrollTop = e.target.scrollTop;
+    }
+  });
+
+  ganttScrollableTimeline.addEventListener('scroll', (e) => {
+    // Sync horizontal scroll to body
+    ganttBodyScrollable.scrollLeft = e.target.scrollLeft;
+  });
+}
+
+// Call setup after DOM is loaded
+window.addEventListener('DOMContentLoaded', () => {
+  setupGanttScrollSync();
+});
 
 // Gantt view is always active now (task view removed)
 
