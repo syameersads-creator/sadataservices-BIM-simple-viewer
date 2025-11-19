@@ -341,11 +341,152 @@ html, body {
 
 .app-container {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 320px 1fr;
   grid-template-rows: 1fr auto auto;
   height: calc(100vh - 70px);
   gap: 0;
   position: relative;
+}
+
+/* ==========================================
+   Task Sidebar - Inline Form
+   ========================================== */
+
+.task-sidebar {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  background: var(--bg-card);
+  border-right: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sidebar-body {
+  padding: var(--spacing-lg);
+  flex: 1;
+  overflow-y: auto;
+}
+
+#inlineTaskForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.inline-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.inline-form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.inline-form-group input,
+.inline-form-group select {
+  padding: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  transition: all var(--transition-fast);
+}
+
+.inline-form-group input:focus,
+.inline-form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.inline-selection-info {
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.inline-selection-info strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.inline-submit-btn {
+  padding: 0.75rem;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.inline-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.inline-submit-btn:active {
+  transform: translateY(0);
+}
+
+.sidebar-debug {
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.sidebar-debug h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.sidebar-debug p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.sidebar-debug strong {
+  color: var(--primary);
+  font-weight: 600;
 }
 
 /* ==========================================
@@ -623,6 +764,7 @@ html, body {
    ========================================== */
 
 .viewer-section {
+  grid-column: 2;
   position: relative;
   background: var(--bg-primary);
   overflow: hidden;
@@ -641,7 +783,7 @@ html, body {
    ========================================== */
 
 .resize-handle {
-  grid-column: 1;
+  grid-column: 2;
   height: 8px;
   background: var(--bg-primary);
   border-top: 1px solid var(--border);
@@ -688,7 +830,7 @@ html, body {
    ========================================== */
 
 .timeline-section {
-  grid-column: 1;
+  grid-column: 2;
   background: white;
   border-top: 1px solid var(--border);
   display: flex;

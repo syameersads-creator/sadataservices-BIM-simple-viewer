@@ -136,6 +136,57 @@
     <!-- Main Container -->
     <div class="app-container">
 
+      <!-- Left Sidebar - Task Creation Form -->
+      <aside class="task-sidebar">
+        <div class="sidebar-header">
+          <h3><i class="fas fa-plus-circle"></i> Quick Add Task</h3>
+        </div>
+        <div class="sidebar-body">
+          <form id="inlineTaskForm">
+            <div class="inline-form-group">
+              <label for="inlineTaskName">Task Name *</label>
+              <input id="inlineTaskName" type="text" placeholder="Enter task name" />
+            </div>
+
+            <div class="inline-form-group">
+              <label for="inlineTaskType">Task Type *</label>
+              <select id="inlineTaskType">
+                <option value="Build">🏗️ Build</option>
+                <option value="Demolish">💥 Demolish</option>
+              </select>
+            </div>
+
+            <div class="inline-form-group">
+              <label for="inlineTaskStart">Start Date *</label>
+              <input id="inlineTaskStart" type="date" />
+            </div>
+
+            <div class="inline-form-group">
+              <label for="inlineTaskEnd">End Date *</label>
+              <input id="inlineTaskEnd" type="date" />
+            </div>
+
+            <div class="inline-selection-info">
+              <i class="fas fa-cube"></i>
+              <span>Selected: <strong id="inlineSelectedCount">0</strong> objects</span>
+            </div>
+
+            <button type="submit" id="inlineCreateTaskBtn" class="inline-submit-btn">
+              <i class="fas fa-plus"></i>
+              Create Task
+            </button>
+          </form>
+
+          <div class="sidebar-debug">
+            <h4>Debug Info</h4>
+            <div id="debugInfo">
+              <p>Tasks in list: <strong id="debugTaskCount">0</strong></p>
+              <p>Last created: <strong id="debugLastTask">None</strong></p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
       <!-- Center - 3D Viewer -->
       <main class="viewer-section">
         <div id="viewer" class="viewer"></div>

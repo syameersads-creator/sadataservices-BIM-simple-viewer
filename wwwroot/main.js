@@ -96,12 +96,20 @@ async function initViewer(urn) {
     // FIXED: Attach selection event listener after viewer is created
     viewer.addEventListener(Autodesk.Viewing.SELECTION_CHANGED_EVENT, (e) => {
       const count = e.dbIdArray?.length || 0;
+
+      // Update modal selected count
       const span = document.getElementById("selectedCount");
       if (span) {
         span.textContent = count;
         // Add animation feedback
         span.parentElement.classList.add('pulse');
         setTimeout(() => span.parentElement.classList.remove('pulse'), 300);
+      }
+
+      // Update inline form selected count
+      const inlineSpan = document.getElementById("inlineSelectedCount");
+      if (inlineSpan) {
+        inlineSpan.textContent = count;
       }
     });
 
@@ -201,6 +209,23 @@ taskModal.onclick = (e) => {
   }
 };
 
+// Helper function to update debug info panel
+function updateDebugInfo() {
+  const debugTaskCount = document.getElementById("debugTaskCount");
+  const debugLastTask = document.getElementById("debugLastTask");
+
+  if (debugTaskCount) {
+    debugTaskCount.textContent = taskList.length;
+  }
+
+  if (debugLastTask && taskList.length > 0) {
+    const lastTask = taskList[taskList.length - 1];
+    debugLastTask.textContent = lastTask.name;
+  } else if (debugLastTask) {
+    debugLastTask.textContent = "None";
+  }
+}
+
 document.getElementById("createTaskBtn").onclick = () => {
   const nameInput = document.getElementById("taskName");
   const typeInput = document.getElementById("taskType");
@@ -269,6 +294,9 @@ document.getElementById("createTaskBtn").onclick = () => {
   // Update task count
   const taskCountElement = document.getElementById("taskCount");
   if (taskCountElement) taskCountElement.textContent = taskList.length;
+
+  // Update debug info
+  updateDebugInfo();
 };
 
 // Delete Task
@@ -287,9 +315,84 @@ deleteTaskBtn.onclick = () => {
     if (currentView === "gantt") {
       renderGanttChart();
     }
+    updateDebugInfo();
     showOverlay(`✓ Task "${task.name}" deleted`);
   }
 };
+
+// ==========================================
+// Inline Task Form Handler
+// ==========================================
+
+// Handle inline form submission
+const inlineTaskForm = document.getElementById("inlineTaskForm");
+if (inlineTaskForm) {
+  inlineTaskForm.onsubmit = (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById("inlineTaskName").value.trim();
+    const type = document.getElementById("inlineTaskType").value;
+    const start = document.getElementById("inlineTaskStart").value;
+    const end = document.getElementById("inlineTaskEnd").value;
+    const selected = viewer?.getSelection() || [];
+
+    console.log('=== INLINE FORM SUBMISSION ===');
+    console.log('Name:', name);
+    console.log('Type:', type);
+    console.log('Start:', start);
+    console.log('End:', end);
+    console.log('Selected objects:', selected);
+    console.log('Current taskList length:', taskList.length);
+
+    if (!name || !start || !end) {
+      showOverlay("⚠ Please fill all required fields");
+      return;
+    }
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (endDate < startDate) {
+      showOverlay("⚠ End date must be after start date");
+      return;
+    }
+
+    const newTask = {
+      id: Date.now(),
+      name,
+      type,
+      start: startDate,
+      end: endDate,
+      elements: selected
+    };
+
+    console.log('Creating new task:', newTask);
+
+    taskList.push(newTask);
+
+    console.log('Task added! New taskList length:', taskList.length);
+    console.log('Full taskList:', taskList);
+
+    // Clear form
+    document.getElementById("inlineTaskName").value = "";
+    document.getElementById("inlineTaskStart").value = "";
+    document.getElementById("inlineTaskEnd").value = "";
+    if (viewer) viewer.clearSelection();
+
+    // Update views
+    console.log('Calling renderTimeline...');
+    renderTimeline();
+    console.log('Calling renderGanttChart...');
+    renderGanttChart();
+
+    // Update UI
+    const taskCountElement = document.getElementById("taskCount");
+    if (taskCountElement) taskCountElement.textContent = taskList.length;
+
+    updateDebugInfo();
+
+    showOverlay(`✓ Task "${name}" created with ${selected.length} object(s)`);
+  };
+}
 
 // Current view state
 let currentView = "task"; // "task" or "gantt"
