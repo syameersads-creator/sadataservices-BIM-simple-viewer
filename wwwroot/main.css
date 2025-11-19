@@ -342,7 +342,7 @@ html, body {
 .app-container {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: 1fr auto minmax(450px, 60vh);
   height: calc(100vh - 70px);
   gap: 0;
   position: relative;
@@ -706,9 +706,9 @@ html, body {
   flex-direction: column;
   box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
   animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  height: 450px;
-  min-height: 200px;
-  max-height: calc(100vh - 200px);
+  height: 100%;
+  min-height: 450px;
+  max-height: 60vh;
 }
 
 @keyframes slideInUp {
