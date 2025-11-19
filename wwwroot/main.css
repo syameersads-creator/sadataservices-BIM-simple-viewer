@@ -348,7 +348,6 @@ html, body {
   height: calc(100vh - 70px);
   gap: 0;
   position: relative;
-  overflow: hidden;
   width: 100%;
 }
 
