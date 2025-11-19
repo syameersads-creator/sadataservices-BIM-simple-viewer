@@ -1369,11 +1369,12 @@ html, body {
 
 .gantt-timeline-grid {
   display: flex;
-  width: 100%;
+  position: relative;
 }
 
 .gantt-timeline-cell {
-  min-width: 80px;
+  width: 80px;
+  flex-shrink: 0;
   border-right: 1px solid #E5E7EB;
   position: relative;
 }
@@ -1461,6 +1462,58 @@ html, body {
 
 .gantt-empty p {
   font-size: 0.875rem;
+}
+
+/* Today marker line */
+.gantt-today-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #EF4444;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.gantt-today-label {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #EF4444;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Playback position line */
+.gantt-playback-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #10B981;
+  z-index: 6;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  transition: left 0.3s ease-out;
+}
+
+.gantt-playback-label {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #10B981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ==========================================

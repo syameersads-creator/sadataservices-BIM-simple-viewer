@@ -141,6 +141,9 @@ let taskList = [];
 let nextTaskId = 1;
 let editingTaskId = null;
 
+// Gantt timeline data for playback
+let ganttTimelineData = null;
+
 // Modal Management
 const taskModal = document.getElementById("taskModal");
 const addTaskFloatingBtn = document.getElementById("addTaskFloatingBtn");
@@ -418,6 +421,13 @@ function renderGanttChart() {
     ganttHeader.appendChild(dateCol);
   });
 
+  // Calculate today's position
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const totalDays = dateColumns.length;
+  const todayIndex = dateColumns.findIndex(d => d.toDateString() === today.toDateString());
+  const todayPosition = todayIndex >= 0 ? ((todayIndex + 0.5) / totalDays) * 100 : null;
+
   // Render tasks
   taskList.forEach((task, index) => {
     const row = document.createElement("div");
@@ -520,6 +530,21 @@ function renderGanttChart() {
 
     barContainer.appendChild(bar);
     timelineGrid.appendChild(barContainer);
+
+    // Add "Today" marker if today is within the date range
+    if (todayPosition !== null) {
+      const todayMarker = document.createElement("div");
+      todayMarker.className = "gantt-today-marker";
+      todayMarker.style.left = `${todayPosition}%`;
+
+      const todayLabel = document.createElement("div");
+      todayLabel.className = "gantt-today-label";
+      todayLabel.textContent = "Today";
+      todayMarker.appendChild(todayLabel);
+
+      timelineGrid.appendChild(todayMarker);
+    }
+
     timelineDiv.appendChild(timelineGrid);
 
     // Append all cells to row
@@ -532,6 +557,32 @@ function renderGanttChart() {
 
     ganttBody.appendChild(row);
   });
+
+  // Store gantt timeline data for playback
+  ganttTimelineData = {
+    dateColumns,
+    minDate,
+    maxDate,
+    totalDays
+  };
+
+  // Add playback marker (initially hidden)
+  const existingPlaybackMarker = document.getElementById('ganttPlaybackMarker');
+  if (existingPlaybackMarker) {
+    existingPlaybackMarker.remove();
+  }
+
+  const playbackMarker = document.createElement("div");
+  playbackMarker.id = "ganttPlaybackMarker";
+  playbackMarker.className = "gantt-playback-marker";
+  playbackMarker.style.display = "none";
+
+  const playbackLabel = document.createElement("div");
+  playbackLabel.className = "gantt-playback-label";
+  playbackLabel.id = "ganttPlaybackLabel";
+  playbackMarker.appendChild(playbackLabel);
+
+  ganttBody.appendChild(playbackMarker);
 
   // Draw dependency lines
   drawDependencyLines(criticalPath);
@@ -557,6 +608,13 @@ document.getElementById("play4dBtn").onclick = () => {
     clearInterval(playInterval);
     isPlaying = false;
     playBtn.innerHTML = '<i class="fas fa-play"></i>';
+
+    // Hide playback marker
+    const playbackMarker = document.getElementById('ganttPlaybackMarker');
+    if (playbackMarker) {
+      playbackMarker.style.display = "none";
+    }
+
     showOverlay("⏸ Playback paused");
     return;
   }
@@ -575,9 +633,28 @@ document.getElementById("play4dBtn").onclick = () => {
   playBtn.innerHTML = '<i class="fas fa-pause"></i>';
   showOverlay("▶ Starting 4D playback...");
 
+  // Show playback marker
+  const playbackMarker = document.getElementById('ganttPlaybackMarker');
+  const playbackLabel = document.getElementById('ganttPlaybackLabel');
+
   playInterval = setInterval(() => {
     const dateDisplay = document.getElementById("currentDate");
     dateDisplay.textContent = current.toDateString();
+
+    // Update playback marker position
+    if (playbackMarker && ganttTimelineData) {
+      const currentIndex = ganttTimelineData.dateColumns.findIndex(
+        d => d.toDateString() === current.toDateString()
+      );
+      if (currentIndex >= 0) {
+        const position = ((currentIndex + 0.5) / ganttTimelineData.totalDays) * 100;
+        playbackMarker.style.left = `${position}%`;
+        playbackMarker.style.display = "block";
+        if (playbackLabel) {
+          playbackLabel.textContent = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+      }
+    }
 
     // Find and isolate active tasks
     const activeTasks = taskList.filter(
@@ -599,6 +676,12 @@ document.getElementById("play4dBtn").onclick = () => {
       clearInterval(playInterval);
       isPlaying = false;
       playBtn.innerHTML = '<i class="fas fa-play"></i>';
+
+      // Hide playback marker
+      if (playbackMarker) {
+        playbackMarker.style.display = "none";
+      }
+
       showOverlay("✓ Playback completed");
       viewer.isolate();
     }
