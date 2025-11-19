@@ -354,8 +354,8 @@ html, body {
 
 .floating-add-btn {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  top: 85px;
+  left: 20px;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -371,7 +371,18 @@ html, body {
   box-shadow: 0 10px 30px rgba(79, 70, 229, 0.4);
   z-index: 999;
   transition: all var(--transition-normal);
-  animation: slideInFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInFromLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .floating-add-btn:hover {

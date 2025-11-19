@@ -96,6 +96,8 @@ async function initViewer(urn) {
     // FIXED: Attach selection event listener after viewer is created
     viewer.addEventListener(Autodesk.Viewing.SELECTION_CHANGED_EVENT, (e) => {
       const count = e.dbIdArray?.length || 0;
+
+      // Update modal selected count
       const span = document.getElementById("selectedCount");
       if (span) {
         span.textContent = count;
@@ -147,8 +149,6 @@ const deleteTaskBtn = document.getElementById("deleteTaskBtn");
 
 function openTaskModal(taskId = null) {
   editingTaskId = taskId;
-  updateParentTaskOptions(taskId);
-  updateDependencyOptions(taskId);
 
   const modalTitle = document.getElementById("modalTitle");
   const createBtnText = document.getElementById("createTaskBtnText");
@@ -162,13 +162,6 @@ function openTaskModal(taskId = null) {
       document.getElementById("taskType").value = task.type;
       document.getElementById("taskStart").value = task.start.toISOString().split('T')[0];
       document.getElementById("taskEnd").value = task.end.toISOString().split('T')[0];
-      document.getElementById("parentTask").value = task.parentId || "";
-
-      // Set dependencies
-      const depSelect = document.getElementById("dependencies");
-      Array.from(depSelect.options).forEach(opt => {
-        opt.selected = task.dependencies && task.dependencies.includes(opt.value);
-      });
 
       modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
       createBtnText.textContent = 'Save Changes';
@@ -196,42 +189,10 @@ function clearTaskForm() {
   document.getElementById("taskName").value = "";
   document.getElementById("taskStart").value = "";
   document.getElementById("taskEnd").value = "";
-  document.getElementById("parentTask").value = "";
-  document.getElementById("dependencies").selectedIndex = -1;
   if (viewer) viewer.clearSelection();
 }
 
-function updateParentTaskOptions(excludeTaskId = null) {
-  const parentSelect = document.getElementById("parentTask");
-  parentSelect.innerHTML = '<option value="">None (Top-level task)</option>';
-
-  taskList.forEach(task => {
-    // Exclude current task (can't be its own parent) and its children
-    if (task.id !== excludeTaskId) {
-      const option = document.createElement("option");
-      option.value = task.id;
-      option.textContent = task.name;
-      parentSelect.appendChild(option);
-    }
-  });
-}
-
-function updateDependencyOptions(excludeTaskId = null) {
-  const depSelect = document.getElementById("dependencies");
-  depSelect.innerHTML = '';
-
-  taskList.forEach(task => {
-    // Exclude current task (can't depend on itself)
-    if (task.id !== excludeTaskId) {
-      const option = document.createElement("option");
-      option.value = task.id;
-      option.textContent = task.name;
-      depSelect.appendChild(option);
-    }
-  });
-}
-
-addTaskFloatingBtn.onclick = openTaskModal;
+addTaskFloatingBtn.onclick = () => openTaskModal();
 closeModalBtn.onclick = closeTaskModal;
 cancelTaskBtn.onclick = closeTaskModal;
 
@@ -242,29 +203,46 @@ taskModal.onclick = (e) => {
   }
 };
 
-document.getElementById("createTaskBtn").onclick = () => {
+// Helper function to update debug info panel (no-op now, debug panel removed)
+function updateDebugInfo() {
+  // Debug panel removed, this is now a no-op
+}
+
+// Attach modal create button handler
+const createTaskBtn = document.getElementById("createTaskBtn");
+console.log('Modal create button found:', !!createTaskBtn);
+
+if (!createTaskBtn) {
+  console.error('ERROR: Could not find createTaskBtn element!');
+}
+
+createTaskBtn.onclick = () => {
+  console.log('=== MODAL FORM SUBMISSION ===');
+
   const nameInput = document.getElementById("taskName");
   const typeInput = document.getElementById("taskType");
   const startInput = document.getElementById("taskStart");
   const endInput = document.getElementById("taskEnd");
-  const parentInput = document.getElementById("parentTask");
-  const dependenciesInput = document.getElementById("dependencies");
+
+  console.log('Form elements found:', {
+    nameInput: !!nameInput,
+    typeInput: !!typeInput,
+    startInput: !!startInput,
+    endInput: !!endInput
+  });
 
   const name = nameInput.value.trim();
   const type = typeInput.value;
   const start = startInput.value;
   const end = endInput.value;
-  const parentId = parentInput.value;
   const selected = viewer?.getSelection() || [];
 
-  console.log('Creating task with:', { name, type, start, end, selected });
-
-  // Get selected dependencies
-  const dependencies = Array.from(dependenciesInput.selectedOptions)
-    .map(opt => opt.value)
-    .filter(id => id);
+  console.log('Form values:', { name, type, start, end, selected });
+  console.log('Editing task ID:', editingTaskId);
+  console.log('Current taskList length BEFORE:', taskList.length);
 
   if (!name || !start || !end) {
+    console.log('Validation failed: missing required fields');
     showOverlay("⚠ Please fill all required fields (name, start, end).");
     return;
   }
@@ -272,45 +250,31 @@ document.getElementById("createTaskBtn").onclick = () => {
   // Validate dates
   const startDate = new Date(start);
   const endDate = new Date(end);
+  console.log('Parsed dates:', { startDate, endDate });
   if (endDate < startDate) {
     showOverlay("⚠ End date must be after start date.");
     return;
   }
 
   if (editingTaskId) {
+    console.log('EDIT MODE - Updating existing task');
     // Edit existing task
     const task = taskList.find(t => t.id === editingTaskId);
     if (task) {
-      // Update old parent's children if parent changed
-      if (task.parentId && task.parentId !== parentId) {
-        const oldParent = taskList.find(t => t.id == task.parentId);
-        if (oldParent && oldParent.children) {
-          oldParent.children = oldParent.children.filter(cid => cid !== editingTaskId);
-        }
-      }
-
+      console.log('Found task to edit:', task);
       task.name = name;
       task.type = type;
       task.start = startDate;
       task.end = endDate;
       task.elements = selected.length > 0 ? selected : task.elements;
-      task.parentId = parentId || null;
-      task.dependencies = dependencies;
 
-      // Add to new parent's children
-      if (parentId && parentId !== task.parentId) {
-        const newParent = taskList.find(t => t.id == parentId);
-        if (newParent) {
-          if (!newParent.children) newParent.children = [];
-          if (!newParent.children.includes(editingTaskId)) {
-            newParent.children.push(editingTaskId);
-          }
-        }
-      }
-
+      console.log('Task updated:', task);
       showOverlay(`✓ Task "${name}" updated successfully`);
+    } else {
+      console.error('ERROR: Could not find task with ID:', editingTaskId);
     }
   } else {
+    console.log('CREATE MODE - Adding new task');
     // Create new task
     const newTask = {
       id: Date.now(),
@@ -318,39 +282,41 @@ document.getElementById("createTaskBtn").onclick = () => {
       type,
       start: startDate,
       end: endDate,
-      elements: selected,
-      parentId: parentId || null,
-      dependencies: dependencies,
-      children: []
+      elements: selected
     };
+
+    console.log('New task object created:', newTask);
 
     taskList.push(newTask);
 
-    console.log('Task added to taskList. Total tasks:', taskList.length);
-    console.log('New task:', newTask);
-
-    // If has parent, add to parent's children
-    if (parentId) {
-      const parent = taskList.find(t => t.id == parentId);
-      if (parent) {
-        if (!parent.children) parent.children = [];
-        parent.children.push(newTask.id);
-      }
-    }
+    console.log('Task added to taskList!');
+    console.log('Total tasks AFTER:', taskList.length);
+    console.log('Full taskList:', taskList);
 
     showOverlay(`✓ Task "${name}" created with ${selected.length} object(s)`);
   }
 
+  console.log('Closing modal...');
   // Close modal and update UI
   closeTaskModal();
 
+  console.log('Calling renderTimeline from modal...');
   // Always update both views
   renderTimeline();
+
+  console.log('Calling renderGanttChart from modal...');
   renderGanttChart();
 
   // Update task count
   const taskCountElement = document.getElementById("taskCount");
-  if (taskCountElement) taskCountElement.textContent = taskList.length;
+  if (taskCountElement) {
+    taskCountElement.textContent = taskList.length;
+    console.log('Updated task count display to:', taskList.length);
+  }
+
+  // Update debug info
+  updateDebugInfo();
+  console.log('Modal submission complete!');
 };
 
 // Delete Task
@@ -361,29 +327,15 @@ deleteTaskBtn.onclick = () => {
   if (!task) return;
 
   if (confirm(`Are you sure you want to delete task "${task.name}"?`)) {
-    // Remove from parent's children
-    if (task.parentId) {
-      const parent = taskList.find(t => t.id == task.parentId);
-      if (parent && parent.children) {
-        parent.children = parent.children.filter(cid => cid !== editingTaskId);
-      }
-    }
-
     // Remove task from list
     taskList = taskList.filter(t => t.id !== editingTaskId);
-
-    // Remove references from other tasks' dependencies
-    taskList.forEach(t => {
-      if (t.dependencies) {
-        t.dependencies = t.dependencies.filter(dep => dep != editingTaskId);
-      }
-    });
 
     closeTaskModal();
     renderTimeline();
     if (currentView === "gantt") {
       renderGanttChart();
     }
+    updateDebugInfo();
     showOverlay(`✓ Task "${task.name}" deleted`);
   }
 };
@@ -460,127 +412,11 @@ function renderTimeline() {
 }
 
 // Calculate Critical Path
+// Note: Without dependencies, critical path calculation is simplified
 function calculateCriticalPath() {
-  if (taskList.length === 0) return [];
-
-  // Calculate earliest start (ES) and earliest finish (EF)
-  const taskData = new Map();
-
-  taskList.forEach(task => {
-    taskData.set(task.id, {
-      task,
-      ES: null,
-      EF: null,
-      LS: null,
-      LF: null,
-      slack: null
-    });
-  });
-
-  // Forward pass - Calculate ES and EF
-  const visited = new Set();
-  const calculateES = (taskId) => {
-    if (visited.has(taskId)) return;
-    visited.add(taskId);
-
-    const data = taskData.get(taskId);
-    const task = data.task;
-
-    // If task has dependencies, ES is max EF of all predecessors
-    if (task.dependencies && task.dependencies.length > 0) {
-      let maxEF = 0;
-      task.dependencies.forEach(depId => {
-        const depIdNum = parseInt(depId);
-        if (taskData.has(depIdNum)) {
-          calculateES(depIdNum);
-          const depData = taskData.get(depIdNum);
-          if (depData.EF !== null && depData.EF > maxEF) {
-            maxEF = depData.EF;
-          }
-        }
-      });
-      data.ES = maxEF;
-    } else {
-      data.ES = 0;
-    }
-
-    const duration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
-    data.EF = data.ES + duration;
-  };
-
-  taskList.forEach(task => calculateES(task.id));
-
-  // Find project completion time
-  let projectCompletion = 0;
-  taskData.forEach(data => {
-    if (data.EF > projectCompletion) {
-      projectCompletion = data.EF;
-    }
-  });
-
-  // Backward pass - Calculate LS and LF
-  taskData.forEach(data => {
-    data.LF = projectCompletion;
-  });
-
-  const calculateLS = (taskId) => {
-    const data = taskData.get(taskId);
-    const task = data.task;
-
-    // Find tasks that depend on this task
-    const successors = taskList.filter(t =>
-      t.dependencies && t.dependencies.some(dep => parseInt(dep) === taskId)
-    );
-
-    if (successors.length > 0) {
-      let minLS = Infinity;
-      successors.forEach(succ => {
-        const succData = taskData.get(succ.id);
-        if (succData.LS !== null && succData.LS < minLS) {
-          minLS = succData.LS;
-        }
-      });
-      data.LF = minLS;
-    }
-
-    const duration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
-    data.LS = data.LF - duration;
-    data.slack = data.LS - data.ES;
-  };
-
-  // Calculate in reverse topological order
-  const reverseVisited = new Set();
-  const reverseCalculate = (taskId) => {
-    if (reverseVisited.has(taskId)) return;
-    reverseVisited.add(taskId);
-
-    const data = taskData.get(taskId);
-    const task = data.task;
-
-    // Process dependencies first
-    if (task.dependencies) {
-      task.dependencies.forEach(depId => {
-        const depIdNum = parseInt(depId);
-        if (taskData.has(depIdNum)) {
-          reverseCalculate(depIdNum);
-        }
-      });
-    }
-
-    calculateLS(taskId);
-  };
-
-  taskList.forEach(task => reverseCalculate(task.id));
-
-  // Critical path tasks have slack = 0
-  const criticalTasks = [];
-  taskData.forEach((data, taskId) => {
-    if (data.slack !== null && Math.abs(data.slack) < 0.1) {
-      criticalTasks.push(taskId);
-    }
-  });
-
-  return criticalTasks;
+  // Without dependencies, we return an empty array
+  // Critical path requires task dependencies to determine the longest path
+  return [];
 }
 
 function renderGanttChart() {
@@ -741,71 +577,11 @@ function renderGanttChart() {
 }
 
 function drawDependencyLines(criticalPath) {
+  // No dependencies to draw anymore
   const svg = document.getElementById('ganttDependencyLines');
-
-  // Clear existing lines
-  svg.innerHTML = `
-    <defs>
-      <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-        <polygon points="0 0, 10 3, 0 6" fill="#4F46E5" />
-      </marker>
-      <marker id="arrowhead-critical" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-        <polygon points="0 0, 10 3, 0 6" fill="#DC2626" />
-      </marker>
-    </defs>
-  `;
-
-  const ganttBody = document.getElementById('ganttBody');
-  const scrollTop = ganttBody.scrollTop;
-  const scrollLeft = ganttBody.scrollLeft;
-
-  // Update SVG size
-  svg.setAttribute('width', ganttBody.scrollWidth);
-  svg.setAttribute('height', ganttBody.scrollHeight);
-
-  taskList.forEach(task => {
-    if (!task.dependencies || task.dependencies.length === 0) return;
-
-    const taskRow = ganttBody.querySelector(`[data-task-id="${task.id}"]`);
-    if (!taskRow) return;
-
-    const taskBar = taskRow.querySelector('.gantt-bar');
-    if (!taskBar) return;
-
-    const taskRect = taskBar.getBoundingClientRect();
-    const bodyRect = ganttBody.getBoundingClientRect();
-
-    task.dependencies.forEach(depId => {
-      const depIdNum = parseInt(depId);
-      const depRow = ganttBody.querySelector(`[data-task-id="${depIdNum}"]`);
-      if (!depRow) return;
-
-      const depBar = depRow.querySelector('.gantt-bar');
-      if (!depBar) return;
-
-      const depRect = depBar.getBoundingClientRect();
-
-      // Calculate line coordinates relative to gantt body
-      const x1 = depRect.right - bodyRect.left + scrollLeft;
-      const y1 = depRect.top - bodyRect.top + depRect.height / 2 + scrollTop;
-      const x2 = taskRect.left - bodyRect.left + scrollLeft;
-      const y2 = taskRect.top - bodyRect.top + taskRect.height / 2 + scrollTop;
-
-      // Create path with arrow
-      const isCritical = criticalPath.includes(task.id) && criticalPath.includes(depIdNum);
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-
-      // Create a smooth curved line
-      const midX = (x1 + x2) / 2;
-      const pathData = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
-
-      line.setAttribute('d', pathData);
-      line.setAttribute('class', `gantt-dependency-line ${isCritical ? 'critical' : ''}`);
-      line.setAttribute('marker-end', `url(#${isCritical ? 'arrowhead-critical' : 'arrowhead'})`);
-
-      svg.appendChild(line);
-    });
-  });
+  if (svg) {
+    svg.innerHTML = '';
+  }
 }
 
 // View toggle functionality
