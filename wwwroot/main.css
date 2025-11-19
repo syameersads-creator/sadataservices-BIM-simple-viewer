@@ -709,6 +709,9 @@ html, body {
   height: 450px;
   min-height: 300px;
   max-height: calc(100vh - 250px);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 @keyframes slideInUp {
@@ -1208,6 +1211,9 @@ html, body {
   position: sticky;
   top: 0;
   z-index: 10;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .gantt-fixed-columns {
@@ -1286,6 +1292,8 @@ html, body {
   display: flex;
   overflow: hidden;
   background: var(--bg-primary);
+  width: 100%;
+  max-width: 100%;
 }
 
 .gantt-body-fixed {
