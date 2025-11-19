@@ -138,7 +138,11 @@ async function initViewer(urn) {
 
 // === 4D Manual Task Creation ===
 let taskList = [];
+let nextTaskId = 1;
 let editingTaskId = null;
+
+// Gantt timeline data for playback
+let ganttTimelineData = null;
 
 // Modal Management
 const taskModal = document.getElementById("taskModal");
@@ -162,6 +166,10 @@ function openTaskModal(taskId = null) {
       document.getElementById("taskType").value = task.type;
       document.getElementById("taskStart").value = task.start.toISOString().split('T')[0];
       document.getElementById("taskEnd").value = task.end.toISOString().split('T')[0];
+      document.getElementById("taskDependencies").value = task.dependencies ? task.dependencies.join(', ') : '';
+      const progress = task.percentComplete || 0;
+      document.getElementById("taskProgress").value = progress;
+      document.getElementById("taskProgressValue").textContent = `${progress}%`;
 
       modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
       createBtnText.textContent = 'Save Changes';
@@ -189,7 +197,20 @@ function clearTaskForm() {
   document.getElementById("taskName").value = "";
   document.getElementById("taskStart").value = "";
   document.getElementById("taskEnd").value = "";
+  document.getElementById("taskDependencies").value = "";
+  document.getElementById("taskProgress").value = "0";
+  document.getElementById("taskProgressValue").textContent = "0%";
   if (viewer) viewer.clearSelection();
+}
+
+// Progress slider handler
+const progressSlider = document.getElementById("taskProgress");
+const progressValue = document.getElementById("taskProgressValue");
+
+if (progressSlider && progressValue) {
+  progressSlider.addEventListener('input', (e) => {
+    progressValue.textContent = `${e.target.value}%`;
+  });
 }
 
 addTaskFloatingBtn.onclick = () => openTaskModal();
@@ -223,12 +244,14 @@ createTaskBtn.onclick = () => {
   const typeInput = document.getElementById("taskType");
   const startInput = document.getElementById("taskStart");
   const endInput = document.getElementById("taskEnd");
+  const dependenciesInput = document.getElementById("taskDependencies");
 
   console.log('Form elements found:', {
     nameInput: !!nameInput,
     typeInput: !!typeInput,
     startInput: !!startInput,
-    endInput: !!endInput
+    endInput: !!endInput,
+    dependenciesInput: !!dependenciesInput
   });
 
   const name = nameInput.value.trim();
@@ -237,7 +260,16 @@ createTaskBtn.onclick = () => {
   const end = endInput.value;
   const selected = viewer?.getSelection() || [];
 
-  console.log('Form values:', { name, type, start, end, selected });
+  // Parse dependencies (comma-separated task IDs)
+  const dependenciesStr = dependenciesInput.value.trim();
+  const dependencies = dependenciesStr ?
+    dependenciesStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) :
+    [];
+
+  // Get P6 fields
+  const percentComplete = parseInt(document.getElementById("taskProgress").value) || 0;
+
+  console.log('Form values:', { name, type, start, end, selected, percentComplete });
   console.log('Editing task ID:', editingTaskId);
   console.log('Current taskList length BEFORE:', taskList.length);
 
@@ -256,6 +288,10 @@ createTaskBtn.onclick = () => {
     return;
   }
 
+  // Calculate durations
+  const durationDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  const remainingDays = Math.ceil(durationDays * (1 - percentComplete / 100));
+
   if (editingTaskId) {
     console.log('EDIT MODE - Updating existing task');
     // Edit existing task
@@ -266,6 +302,10 @@ createTaskBtn.onclick = () => {
       task.type = type;
       task.start = startDate;
       task.end = endDate;
+      task.dependencies = dependencies;
+      task.percentComplete = percentComplete;
+      task.originalDuration = durationDays;
+      task.remainingDuration = remainingDays;
       task.elements = selected.length > 0 ? selected : task.elements;
 
       console.log('Task updated:', task);
@@ -277,11 +317,15 @@ createTaskBtn.onclick = () => {
     console.log('CREATE MODE - Adding new task');
     // Create new task
     const newTask = {
-      id: Date.now(),
+      id: nextTaskId++,
       name,
       type,
       start: startDate,
       end: endDate,
+      dependencies: dependencies,
+      percentComplete: percentComplete,
+      originalDuration: durationDays,
+      remainingDuration: remainingDays,
       elements: selected
     };
 
@@ -299,10 +343,6 @@ createTaskBtn.onclick = () => {
   console.log('Closing modal...');
   // Close modal and update UI
   closeTaskModal();
-
-  console.log('Calling renderTimeline from modal...');
-  // Always update both views
-  renderTimeline();
 
   console.log('Calling renderGanttChart from modal...');
   renderGanttChart();
@@ -331,85 +371,16 @@ deleteTaskBtn.onclick = () => {
     taskList = taskList.filter(t => t.id !== editingTaskId);
 
     closeTaskModal();
-    renderTimeline();
-    if (currentView === "gantt") {
-      renderGanttChart();
-    }
+    renderGanttChart();
     updateDebugInfo();
     showOverlay(`✓ Task "${task.name}" deleted`);
   }
 };
 
 // Current view state
-let currentView = "task"; // "task" or "gantt"
+let currentView = "gantt"; // Always gantt view now
 
-function renderTimeline() {
-  console.log('renderTimeline called. Tasks:', taskList.length);
-
-  const container = document.getElementById("taskView");
-  if (!container) {
-    console.error('taskView container not found');
-    return;
-  }
-
-  container.innerHTML = "";
-
-  // Update task count
-  const taskCountElement = document.getElementById("taskCount");
-  if (taskCountElement) taskCountElement.textContent = taskList.length;
-
-  if (taskList.length === 0) {
-    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: #9CA3AF; font-size: 0.875rem;">No tasks created yet. Create your first task above!</div>';
-    return;
-  }
-
-  const allDates = taskList.flatMap((t) => [t.start, t.end]);
-  const minDate = new Date(Math.min(...allDates));
-  const maxDate = new Date(Math.max(...allDates));
-  const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
-
-  taskList.forEach((task, index) => {
-    const row = document.createElement("div");
-    row.className = "timeline-row";
-    row.style.animationDelay = `${index * 0.05}s`;
-
-    const bar = document.createElement("div");
-    bar.className = "timeline-bar";
-    bar.setAttribute("data-type", task.type);
-
-    const startOffset = (task.start - minDate) / (1000 * 60 * 60 * 24);
-    const duration = (task.end - task.start) / (1000 * 60 * 60 * 24);
-    bar.style.left = `${(startOffset / totalDays) * 100}%`;
-    bar.style.width = `${(duration / totalDays) * 100}%`;
-
-    // Add task name label
-    const label = document.createElement("span");
-    label.textContent = task.name;
-    label.style.whiteSpace = "nowrap";
-    label.style.overflow = "hidden";
-    label.style.textOverflow = "ellipsis";
-    bar.appendChild(label);
-
-    bar.title = `${task.name}: ${task.start.toDateString()} → ${task.end.toDateString()} (${task.elements.length} objects)\nClick to isolate objects | Double-click to edit`;
-
-    bar.onclick = () => {
-      if (task.elements && task.elements.length > 0) {
-        viewer.isolate(task.elements);
-        showOverlay(`✓ Viewing task: ${task.name} (${task.elements.length} objects)`);
-      } else {
-        showOverlay(`⚠ No objects associated with task: ${task.name}`);
-      }
-    };
-
-    bar.ondblclick = (e) => {
-      e.stopPropagation();
-      openTaskModal(task.id);
-    };
-
-    row.appendChild(bar);
-    container.appendChild(row);
-  });
-}
+// renderTimeline function removed - using Gantt view only
 
 // Calculate Critical Path
 // Note: Without dependencies, critical path calculation is simplified
@@ -423,21 +394,23 @@ function renderGanttChart() {
   console.log('renderGanttChart called. Tasks:', taskList.length);
 
   const ganttBody = document.getElementById("ganttBody");
+  const ganttBodyFixed = document.getElementById("ganttBodyFixed");
   const ganttHeader = document.getElementById("ganttTimelineHeader");
 
-  if (!ganttBody || !ganttHeader) {
+  if (!ganttBody || !ganttBodyFixed || !ganttHeader) {
     console.error('Gantt elements not found');
     return;
   }
 
-  // Clear existing content except SVG
+  // Clear existing content
   const svg = document.getElementById("ganttDependencyLines");
   ganttBody.innerHTML = "";
   if (svg) ganttBody.appendChild(svg);
+  ganttBodyFixed.innerHTML = "";
   ganttHeader.innerHTML = "";
 
   if (taskList.length === 0) {
-    ganttBody.innerHTML = `
+    ganttBodyFixed.innerHTML = `
       <div class="gantt-empty">
         <i class="fas fa-chart-gantt"></i>
         <p>No tasks created yet. Create your first task above!</p>
@@ -478,27 +451,89 @@ function renderGanttChart() {
     ganttHeader.appendChild(dateCol);
   });
 
+  // Calculate today's position
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const totalDays = dateColumns.length;
+  const todayIndex = dateColumns.findIndex(d => d.toDateString() === today.toDateString());
+  const todayPosition = todayIndex >= 0 ? ((todayIndex + 0.5) / totalDays) * 100 : null;
+
   // Render tasks
   taskList.forEach((task, index) => {
-    const row = document.createElement("div");
-    row.className = "gantt-row";
-    row.style.animationDelay = `${index * 0.05}s`;
+    // Create fixed columns row
+    const rowFixed = document.createElement("div");
+    rowFixed.className = "gantt-row-fixed";
+    rowFixed.style.animationDelay = `${index * 0.05}s`;
+    rowFixed.dataset.taskId = task.id;
 
-    // Task name column
-    const taskNameDiv = document.createElement("div");
-    taskNameDiv.className = "gantt-task-name";
-    taskNameDiv.innerHTML = `
-      <div class="task-title">
-        <span class="task-type-badge ${task.type.toLowerCase()}">${task.type === 'Build' ? '🏗️' : '💥'} ${task.type}</span>
-        ${task.name}
-      </div>
-      <div class="task-meta">
-        <span><i class="fas fa-calendar"></i> ${task.start.toLocaleDateString()} - ${task.end.toLocaleDateString()}</span>
-        <span><i class="fas fa-cube"></i> ${task.elements.length} objects</span>
-      </div>
+    // Activity ID column
+    const taskIdCell = document.createElement("div");
+    taskIdCell.className = "gantt-row-cell";
+    taskIdCell.textContent = task.id;
+
+    // Activity Name column
+    const taskNameCell = document.createElement("div");
+    taskNameCell.className = "gantt-row-cell";
+    taskNameCell.style.justifyContent = "flex-start";
+    taskNameCell.innerHTML = `
+      <span class="task-type-badge ${task.type.toLowerCase()}" style="margin-right: 4px; font-size: 0.7rem;">${task.type === 'Build' ? '🏗️' : '💥'}</span>
+      <span style="font-weight: 500; color: #1F2937; font-size: 0.75rem;">${task.name}</span>
     `;
 
-    // Timeline column
+    // Orig Dur column
+    const origDurCell = document.createElement("div");
+    origDurCell.className = "gantt-row-cell";
+    origDurCell.textContent = task.originalDuration || 0;
+
+    // Rem Dur column
+    const remDurCell = document.createElement("div");
+    remDurCell.className = "gantt-row-cell";
+    remDurCell.textContent = task.remainingDuration || 0;
+
+    // % Comp column
+    const pctCompCell = document.createElement("div");
+    pctCompCell.className = "gantt-row-cell";
+    pctCompCell.textContent = `${task.percentComplete || 0}%`;
+
+    // Start column
+    const startCell = document.createElement("div");
+    startCell.className = "gantt-row-cell";
+    startCell.textContent = task.start.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+
+    // Finish column
+    const finishCell = document.createElement("div");
+    finishCell.className = "gantt-row-cell";
+    finishCell.textContent = task.end.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+
+    // Total Float column (simplified - 0 for critical, calculated for non-critical)
+    const totalFloatCell = document.createElement("div");
+    totalFloatCell.className = "gantt-row-cell";
+    const isCritical = criticalPath.includes(task.id);
+    totalFloatCell.textContent = isCritical ? '0' : '-';
+
+    // Predecessors column
+    const predsCell = document.createElement("div");
+    predsCell.className = "gantt-row-cell";
+    predsCell.textContent = task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : '-';
+
+    // Append cells to fixed row
+    rowFixed.appendChild(taskIdCell);
+    rowFixed.appendChild(taskNameCell);
+    rowFixed.appendChild(origDurCell);
+    rowFixed.appendChild(remDurCell);
+    rowFixed.appendChild(pctCompCell);
+    rowFixed.appendChild(startCell);
+    rowFixed.appendChild(finishCell);
+    rowFixed.appendChild(totalFloatCell);
+    rowFixed.appendChild(predsCell);
+
+    // Create timeline row
+    const rowTimeline = document.createElement("div");
+    rowTimeline.className = "gantt-row-timeline";
+    rowTimeline.style.animationDelay = `${index * 0.05}s`;
+    rowTimeline.dataset.taskId = task.id;
+
+    // Timeline content
     const timelineDiv = document.createElement("div");
     timelineDiv.className = "gantt-timeline";
 
@@ -541,6 +576,14 @@ function renderGanttChart() {
       bar.classList.add('critical');
     }
 
+    // Add progress indicator
+    if (task.percentComplete && task.percentComplete > 0) {
+      const progressBar = document.createElement("div");
+      progressBar.className = "gantt-bar-progress";
+      progressBar.style.width = `${task.percentComplete}%`;
+      bar.appendChild(progressBar);
+    }
+
     const barLabel = document.createElement("span");
     barLabel.className = "gantt-bar-label";
     barLabel.textContent = task.name;
@@ -564,46 +607,249 @@ function renderGanttChart() {
 
     barContainer.appendChild(bar);
     timelineGrid.appendChild(barContainer);
-    timelineDiv.appendChild(timelineGrid);
 
-    row.appendChild(taskNameDiv);
-    row.appendChild(timelineDiv);
-    row.dataset.taskId = task.id;
-    ganttBody.appendChild(row);
+    // Add "Today" marker if today is within the date range
+    if (todayPosition !== null) {
+      const todayMarker = document.createElement("div");
+      todayMarker.className = "gantt-today-marker";
+      todayMarker.style.left = `${todayPosition}%`;
+
+      const todayLabel = document.createElement("div");
+      todayLabel.className = "gantt-today-label";
+      todayLabel.textContent = "Today";
+      todayMarker.appendChild(todayLabel);
+
+      timelineGrid.appendChild(todayMarker);
+    }
+
+    timelineDiv.appendChild(timelineGrid);
+    rowTimeline.appendChild(timelineDiv);
+
+    // Append rows to respective containers
+    ganttBodyFixed.appendChild(rowFixed);
+    ganttBody.appendChild(rowTimeline);
   });
+
+  // Store gantt timeline data for playback
+  ganttTimelineData = {
+    dateColumns,
+    minDate,
+    maxDate,
+    totalDays
+  };
+
+  // Add playback marker (initially hidden)
+  const existingPlaybackMarker = document.getElementById('ganttPlaybackMarker');
+  if (existingPlaybackMarker) {
+    existingPlaybackMarker.remove();
+  }
+
+  const playbackMarker = document.createElement("div");
+  playbackMarker.id = "ganttPlaybackMarker";
+  playbackMarker.className = "gantt-playback-marker";
+  playbackMarker.style.display = "none";
+
+  const playbackLabel = document.createElement("div");
+  playbackLabel.className = "gantt-playback-label";
+  playbackLabel.id = "ganttPlaybackLabel";
+  playbackMarker.appendChild(playbackLabel);
+
+  ganttBody.appendChild(playbackMarker);
 
   // Draw dependency lines
   drawDependencyLines(criticalPath);
 }
 
 function drawDependencyLines(criticalPath) {
-  // No dependencies to draw anymore
   const svg = document.getElementById('ganttDependencyLines');
-  if (svg) {
-    svg.innerHTML = '';
-  }
+  if (!svg) return;
+
+  // Clear existing content
+  svg.innerHTML = '';
+
+  // Add marker definitions for both regular and critical path arrows
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+  // Regular arrow marker
+  const regularMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  regularMarker.setAttribute('id', 'arrowhead-regular');
+  regularMarker.setAttribute('markerWidth', '10');
+  regularMarker.setAttribute('markerHeight', '10');
+  regularMarker.setAttribute('refX', '9');
+  regularMarker.setAttribute('refY', '3');
+  regularMarker.setAttribute('orient', 'auto');
+  const regularPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  regularPolygon.setAttribute('points', '0 0, 10 3, 0 6');
+  regularPolygon.setAttribute('fill', '#6B7280');
+  regularMarker.appendChild(regularPolygon);
+  defs.appendChild(regularMarker);
+
+  // Critical path arrow marker
+  const criticalMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  criticalMarker.setAttribute('id', 'arrowhead-critical');
+  criticalMarker.setAttribute('markerWidth', '10');
+  criticalMarker.setAttribute('markerHeight', '10');
+  criticalMarker.setAttribute('refX', '9');
+  criticalMarker.setAttribute('refY', '3');
+  criticalMarker.setAttribute('orient', 'auto');
+  const criticalPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  criticalPolygon.setAttribute('points', '0 0, 10 3, 0 6');
+  criticalPolygon.setAttribute('fill', '#DC2626');
+  criticalMarker.appendChild(criticalPolygon);
+  defs.appendChild(criticalMarker);
+
+  svg.appendChild(defs);
+
+  // Get scroll container for offset calculations
+  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
+  const scrollLeft = ganttBodyScrollable ? ganttBodyScrollable.scrollLeft : 0;
+  const scrollTop = ganttBodyScrollable ? ganttBodyScrollable.scrollTop : 0;
+
+  // Draw dependency arrows between tasks
+  taskList.forEach(task => {
+    if (!task.dependencies || task.dependencies.length === 0) return;
+
+    task.dependencies.forEach(predId => {
+      const predecessor = taskList.find(t => t.id === predId);
+      if (!predecessor) return;
+
+      // Find the bars for both tasks
+      const predBar = document.querySelector(`.gantt-bar[data-task-id="${predId}"]`);
+      const succBar = document.querySelector(`.gantt-bar[data-task-id="${task.id}"]`);
+
+      if (!predBar || !succBar) return;
+
+      // Get positions relative to the viewport
+      const predRect = predBar.getBoundingClientRect();
+      const succRect = succBar.getBoundingClientRect();
+      const svgRect = svg.getBoundingClientRect();
+
+      // Calculate positions accounting for scroll
+      const x1 = predRect.right - svgRect.left + scrollLeft;
+      const y1 = predRect.top + predRect.height / 2 - svgRect.top + scrollTop;
+      const x2 = succRect.left - svgRect.left + scrollLeft;
+      const y2 = succRect.top + succRect.height / 2 - svgRect.top + scrollTop;
+
+      // Determine if this is a critical path dependency
+      const isCritical = criticalPath.includes(predId) && criticalPath.includes(task.id);
+      const color = isCritical ? '#DC2626' : '#6B7280';
+      const marker = isCritical ? 'url(#arrowhead-critical)' : 'url(#arrowhead-regular)';
+      const strokeWidth = isCritical ? '2.5' : '2';
+
+      // Create path with right angle connectors (P6 style)
+      // Add some offset for better visibility
+      const offsetX = 8;
+      const midX = x1 + (x2 - x1) * 0.5;
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+      // Create a path that goes: right from predecessor -> down/up -> right to successor
+      let pathData;
+      if (Math.abs(y2 - y1) < 5) {
+        // Tasks on same row - simple horizontal line
+        pathData = `M ${x1 + offsetX} ${y1} L ${x2 - offsetX} ${y2}`;
+      } else {
+        // Tasks on different rows - use stepped path
+        pathData = `M ${x1 + offsetX} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2 - offsetX} ${y2}`;
+      }
+
+      path.setAttribute('d', pathData);
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', strokeWidth);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('marker-end', marker);
+      path.setAttribute('opacity', '0.8');
+      path.classList.add('gantt-dependency-line');
+      if (isCritical) {
+        path.classList.add('critical');
+      }
+
+      // Add tooltip with task names
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${predecessor.name} → ${task.name}${isCritical ? ' (Critical Path)' : ''}`;
+      path.appendChild(title);
+
+      svg.appendChild(path);
+    });
+  });
 }
 
-// View toggle functionality
-document.getElementById("taskViewBtn").onclick = () => {
-  currentView = "task";
-  document.getElementById("taskView").classList.add("active");
-  document.getElementById("ganttView").classList.remove("active");
-  document.getElementById("taskViewBtn").classList.add("active");
-  document.getElementById("ganttViewBtn").classList.remove("active");
-  renderTimeline();
-  showOverlay("📊 Switched to Task View");
-};
+// Synchronize scrolling between Gantt header and body
+function setupGanttScrollSync() {
+  const ganttFixedColumns = document.querySelector('.gantt-fixed-columns');
+  const ganttScrollableTimeline = document.querySelector('.gantt-scrollable-timeline');
+  const ganttBodyFixed = document.querySelector('.gantt-body-fixed');
+  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
 
-document.getElementById("ganttViewBtn").onclick = () => {
-  currentView = "gantt";
-  document.getElementById("ganttView").classList.add("active");
-  document.getElementById("taskView").classList.remove("active");
-  document.getElementById("ganttViewBtn").classList.add("active");
-  document.getElementById("taskViewBtn").classList.remove("active");
-  renderGanttChart();
-  showOverlay("📈 Switched to Gantt Chart View");
-};
+  if (!ganttScrollableTimeline || !ganttBodyScrollable || !ganttFixedColumns || !ganttBodyFixed) return;
+
+  let isSyncingVertical = false;
+  let scrollTimeout;
+
+  // Debounced dependency redraw
+  const redrawDependenciesDebounced = () => {
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      const criticalPath = calculateCriticalPath();
+      drawDependencyLines(criticalPath);
+    }, 100);
+  };
+
+  // Sync horizontal scroll within fixed columns section (header <-> body)
+  ganttBodyFixed.addEventListener('scroll', (e) => {
+    ganttFixedColumns.scrollLeft = e.target.scrollLeft;
+
+    // Sync vertical scroll to timeline body (to keep rows aligned)
+    if (!isSyncingVertical) {
+      isSyncingVertical = true;
+      ganttBodyScrollable.scrollTop = e.target.scrollTop;
+      isSyncingVertical = false;
+    }
+
+    redrawDependenciesDebounced();
+  });
+
+  ganttFixedColumns.addEventListener('scroll', (e) => {
+    ganttBodyFixed.scrollLeft = e.target.scrollLeft;
+  });
+
+  // Sync horizontal scroll within timeline section (header <-> body)
+  ganttBodyScrollable.addEventListener('scroll', (e) => {
+    // Sync horizontal scroll to timeline header
+    ganttScrollableTimeline.scrollLeft = e.target.scrollLeft;
+
+    // Sync vertical scroll to fixed columns body (to keep rows aligned)
+    if (!isSyncingVertical) {
+      isSyncingVertical = true;
+      ganttBodyFixed.scrollTop = e.target.scrollTop;
+      isSyncingVertical = false;
+    }
+
+    redrawDependenciesDebounced();
+  });
+
+  ganttScrollableTimeline.addEventListener('scroll', (e) => {
+    // Sync horizontal scroll to timeline body
+    ganttBodyScrollable.scrollLeft = e.target.scrollLeft;
+  });
+}
+
+// Call setup after DOM is loaded
+window.addEventListener('DOMContentLoaded', () => {
+  setupGanttScrollSync();
+});
+
+// Redraw dependencies on window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    const criticalPath = calculateCriticalPath();
+    drawDependencyLines(criticalPath);
+  }, 200);
+});
+
+// Gantt view is always active now (task view removed)
 
 let isPlaying = false;
 let playInterval = null;
@@ -615,6 +861,13 @@ document.getElementById("play4dBtn").onclick = () => {
     clearInterval(playInterval);
     isPlaying = false;
     playBtn.innerHTML = '<i class="fas fa-play"></i>';
+
+    // Hide playback marker
+    const playbackMarker = document.getElementById('ganttPlaybackMarker');
+    if (playbackMarker) {
+      playbackMarker.style.display = "none";
+    }
+
     showOverlay("⏸ Playback paused");
     return;
   }
@@ -633,9 +886,28 @@ document.getElementById("play4dBtn").onclick = () => {
   playBtn.innerHTML = '<i class="fas fa-pause"></i>';
   showOverlay("▶ Starting 4D playback...");
 
+  // Show playback marker
+  const playbackMarker = document.getElementById('ganttPlaybackMarker');
+  const playbackLabel = document.getElementById('ganttPlaybackLabel');
+
   playInterval = setInterval(() => {
     const dateDisplay = document.getElementById("currentDate");
     dateDisplay.textContent = current.toDateString();
+
+    // Update playback marker position
+    if (playbackMarker && ganttTimelineData) {
+      const currentIndex = ganttTimelineData.dateColumns.findIndex(
+        d => d.toDateString() === current.toDateString()
+      );
+      if (currentIndex >= 0) {
+        const position = ((currentIndex + 0.5) / ganttTimelineData.totalDays) * 100;
+        playbackMarker.style.left = `${position}%`;
+        playbackMarker.style.display = "block";
+        if (playbackLabel) {
+          playbackLabel.textContent = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+      }
+    }
 
     // Find and isolate active tasks
     const activeTasks = taskList.filter(
@@ -657,6 +929,12 @@ document.getElementById("play4dBtn").onclick = () => {
       clearInterval(playInterval);
       isPlaying = false;
       playBtn.innerHTML = '<i class="fas fa-play"></i>';
+
+      // Hide playback marker
+      if (playbackMarker) {
+        playbackMarker.style.display = "none";
+      }
+
       showOverlay("✓ Playback completed");
       viewer.isolate();
     }
@@ -695,20 +973,18 @@ document.getElementById("uploadScheduleBtn").onclick = async () => {
         // Add uploaded tasks to taskList
         data.tasks.forEach(task => {
           taskList.push({
-            id: task.id || Date.now() + Math.random(),
+            id: task.id || nextTaskId++,
             name: task.name,
             type: task.type || "Build",
             start: new Date(task.start),
             end: new Date(task.end),
+            dependencies: task.dependencies || [],
             elements: task.elements || []
           });
         });
 
-        // Update both views
-        renderTimeline();
-        if (currentView === "gantt") {
-          renderGanttChart();
-        }
+        // Update Gantt view
+        renderGanttChart();
 
         showOverlay(`✓ Uploaded ${data.tasks.length} task(s) from schedule`);
       } else {
@@ -750,13 +1026,14 @@ document.getElementById("exportExcelBtn").onclick = () => {
 
   try {
     // Prepare data for export
-    const exportData = taskList.map((task, index) => ({
-      "Task #": index + 1,
+    const exportData = taskList.map((task) => ({
+      "Task ID": task.id,
       "Task Name": task.name,
       "Type": task.type,
       "Start Date": task.start.toLocaleDateString('en-US'),
       "End Date": task.end.toLocaleDateString('en-US'),
       "Duration (days)": Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1,
+      "Dependencies": task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(", ") : "None",
       "Objects Count": task.elements.length,
       "Object IDs": task.elements.join(", ") || "None"
     }));
@@ -769,12 +1046,13 @@ document.getElementById("exportExcelBtn").onclick = () => {
 
     // Set column widths
     ws1['!cols'] = [
-      { wch: 8 },  // Task #
+      { wch: 10 }, // Task ID
       { wch: 30 }, // Task Name
       { wch: 12 }, // Type
       { wch: 15 }, // Start Date
       { wch: 15 }, // End Date
       { wch: 15 }, // Duration
+      { wch: 20 }, // Dependencies
       { wch: 15 }, // Objects Count
       { wch: 50 }  // Object IDs
     ];
@@ -896,8 +1174,8 @@ document.addEventListener('mousemove', (e) => {
   const newHeight = startHeight + deltaY;
 
   // Apply constraints
-  const minHeight = 150;
-  const maxHeight = window.innerHeight - 300;
+  const minHeight = 300;
+  const maxHeight = window.innerHeight - 250;
   const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
 
   timelineSection.style.height = `${constrainedHeight}px`;
