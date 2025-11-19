@@ -192,7 +192,7 @@ function clearTaskForm() {
   if (viewer) viewer.clearSelection();
 }
 
-addTaskFloatingBtn.onclick = openTaskModal;
+addTaskFloatingBtn.onclick = () => openTaskModal();
 closeModalBtn.onclick = closeTaskModal;
 cancelTaskBtn.onclick = closeTaskModal;
 
