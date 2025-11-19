@@ -815,6 +815,7 @@ document.getElementById("taskViewBtn").onclick = () => {
   document.getElementById("ganttView").classList.remove("active");
   document.getElementById("taskViewBtn").classList.add("active");
   document.getElementById("ganttViewBtn").classList.remove("active");
+  renderTimeline();
   showOverlay("📊 Switched to Task View");
 };
 
