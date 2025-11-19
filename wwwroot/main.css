@@ -1323,17 +1323,18 @@ html, body {
   display: grid;
   grid-template-columns: 80px 200px 130px 130px 150px;
   border-bottom: 1px solid var(--border);
-  min-height: 60px;
+  height: 60px;
   background: white;
   transition: all var(--transition-normal);
 }
 
 .gantt-row-timeline {
   border-bottom: 1px solid var(--border);
-  min-height: 60px;
+  height: 60px;
   background: white;
   transition: all var(--transition-normal);
   animation: slideInRight 0.3s ease;
+  position: relative;
 }
 
 .gantt-row-cell {
@@ -1402,16 +1403,20 @@ html, body {
 .gantt-timeline {
   position: relative;
   display: flex;
-  overflow-x: auto;
+  width: 100%;
+  height: 100%;
 }
 
 .gantt-timeline-grid {
   display: flex;
   position: relative;
+  height: 100%;
+  min-width: fit-content;
 }
 
 .gantt-timeline-cell {
   width: 80px;
+  height: 60px;
   flex-shrink: 0;
   border-right: 1px solid #E5E7EB;
   position: relative;
@@ -1428,6 +1433,8 @@ html, body {
   width: 100%;
   height: 100%;
   padding: 10px 0;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .gantt-bar {
@@ -1444,6 +1451,7 @@ html, body {
   transition: all var(--transition-normal);
   box-shadow: var(--shadow-md);
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .gantt-bar::before {
