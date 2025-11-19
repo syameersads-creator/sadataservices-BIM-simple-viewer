@@ -1326,18 +1326,35 @@ html, body {
   height: 100%;
   pointer-events: none;
   z-index: 1;
+  overflow: visible;
 }
 
 .gantt-dependency-line {
   fill: none;
   stroke: var(--primary);
   stroke-width: 2;
-  marker-end: url(#arrowhead);
+  marker-end: url(#arrowhead-regular);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  pointer-events: stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gantt-dependency-line:hover {
+  stroke-width: 3;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 3px currentColor);
 }
 
 .gantt-dependency-line.critical {
   stroke: var(--danger);
   stroke-width: 3;
+}
+
+.gantt-dependency-line.critical:hover {
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px #DC2626);
 }
 
 .gantt-bar.critical {
