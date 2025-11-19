@@ -1,0 +1,9 @@
+Task Name,Type,Start,Finish,ID
+Foundation Work,Build,2025-01-01,2025-01-15,TASK-001
+Demolish Old Structure,Demolish,2025-01-05,2025-01-10,TASK-002
+Steel Frame Installation,Build,2025-01-16,2025-02-15,TASK-003
+Electrical Rough-In,Build,2025-02-01,2025-02-20,TASK-004
+Remove Existing Walls,Demolish,2025-01-11,2025-01-18,TASK-005
+HVAC Installation,Build,2025-02-10,2025-03-05,TASK-006
+Drywall Installation,Build,2025-02-25,2025-03-15,TASK-007
+Interior Finishes,Build,2025-03-10,2025-04-01,TASK-008

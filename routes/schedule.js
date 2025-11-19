@@ -17,14 +17,31 @@ router.post("/api/schedule/:urn", formidable(), async (req, res, next) => {
   fs.createReadStream(file.path)
     .pipe(csv())
     .on("data", (row) => {
-      if (row["Task Name"] && row["Start"] && row["Finish"])
+      if (row["Task Name"] && row["Start"] && row["Finish"]) {
+        // Auto-detect task type from name or type column
+        let taskType = row["Type"] || row["Task Type"] || "Build";
+        const taskName = row["Task Name"].toLowerCase();
+
+        // Auto-detect from task name keywords
+        if (!row["Type"] && !row["Task Type"]) {
+          if (taskName.includes("demolish") || taskName.includes("remove") ||
+              taskName.includes("demo") || taskName.includes("tear down") ||
+              taskName.includes("dismantle") || taskName.includes("strip")) {
+            taskType = "Demolish";
+          } else {
+            taskType = "Build";
+          }
+        }
+
         tasks.push({
           id: row["ID"] || row["Task ID"] || row["Task Name"],
           name: row["Task Name"],
+          type: taskType,
           start: new Date(row["Start"]),
           end: new Date(row["Finish"]),
           elements: [], // link later
         });
+      }
     })
     .on("end", () => {
       const f = path.join(SCHEDULE_DIR, `${req.params.urn}.json`);

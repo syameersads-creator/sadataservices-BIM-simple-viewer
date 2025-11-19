@@ -1,12 +1,9 @@
 // === S&A 4D Viewer Main Script ===
-
-// Initialize Viewer
 let viewer;
 let currentUrn = null;
 let schedule = null;
 let fourdExt = null;
 
-// Utility toast overlay (small top-right messages)
 function showOverlay(msg, duration = 2000) {
   let overlay = document.getElementById("overlay");
   if (!overlay) {
@@ -27,7 +24,6 @@ function showOverlay(msg, duration = 2000) {
   setTimeout(() => (overlay.style.display = "none"), duration);
 }
 
-// === GLOBAL OVERLAY CONTROLS ===
 function showGlobalOverlay(title = "Loading...", startPercent = 0) {
   const overlay = document.getElementById("globalOverlay");
   const bar = document.getElementById("overlayBar");
@@ -54,14 +50,11 @@ function hideGlobalOverlay(delay = 800) {
   }, delay);
 }
 
-// === MODEL DROPDOWN POPULATION ===
 async function loadModelList() {
   const select = document.getElementById("modelSelect");
   select.innerHTML = '<option value="">Select Model</option>';
-
   const res = await fetch("/api/models");
   if (!res.ok) return console.warn("⚠️ Failed to fetch models list");
-
   const models = await res.json();
   models.forEach((m) => {
     const opt = document.createElement("option");
@@ -71,25 +64,21 @@ async function loadModelList() {
   });
 }
 
-// When dropdown changes, load selected model
 document.getElementById("modelSelect").onchange = (e) => {
   const urn = e.target.value;
   if (urn) {
+    currentUrn = urn;
     showGlobalOverlay("Loading selected model...", 0);
     initViewer(urn);
   }
 };
 
-// Call once on page load
 window.addEventListener("DOMContentLoaded", loadModelList);
 document.getElementById("refreshModels").onclick = loadModelList;
 
-// ================================
-// Initialize Autodesk Viewer
 async function initViewer(urn) {
   const tokenResponse = await fetch("/api/auth/token");
   const token = await tokenResponse.json();
-
   const options = {
     env: "AutodeskProduction",
     api: "derivativeV2",
@@ -104,35 +93,37 @@ async function initViewer(urn) {
     viewer.start();
     window.myViewer = viewer;
 
+    // FIXED: Attach selection event listener after viewer is created
+    viewer.addEventListener(Autodesk.Viewing.SELECTION_CHANGED_EVENT, (e) => {
+      const count = e.dbIdArray?.length || 0;
+      const span = document.getElementById("selectedCount");
+      if (span) {
+        span.textContent = count;
+        // Add animation feedback
+        span.parentElement.classList.add('pulse');
+        setTimeout(() => span.parentElement.classList.remove('pulse'), 300);
+      }
+    });
+
     Autodesk.Viewing.Document.load(
       "urn:" + urn,
       (doc) => {
         const defaultModel = doc.getRoot().getDefaultGeometry();
         showGlobalOverlay("Loading model geometry...", 0);
-
         const modelPromise = viewer.loadDocumentNode(doc, defaultModel);
-        modelPromise
-          .then((model) => {
-            model.addEventListener(
-              Autodesk.Viewing.PROGRESS_UPDATE_EVENT,
-              (e) => {
-                const pct = Math.floor((e.loaded / e.total) * 100);
-                updateGlobalProgress(pct);
-              }
-            );
-            viewer.addEventListener(
-              Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
-              () => {
-                updateGlobalProgress(100, "Model loaded successfully!");
-                hideGlobalOverlay();
-              }
-            );
-          })
-          .catch((err) => {
-            console.error(err);
-            hideGlobalOverlay();
-            showOverlay("Error loading model");
-          });
+        modelPromise.then(() => {
+          viewer.addEventListener(
+            Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
+            () => {
+              updateGlobalProgress(100, "Model loaded successfully!");
+              hideGlobalOverlay();
+            }
+          );
+        }).catch((err) => {
+          console.error(err);
+          hideGlobalOverlay();
+          showOverlay("Error loading model");
+        });
       },
       (err) => {
         console.error(err);
@@ -143,95 +134,1132 @@ async function initViewer(urn) {
   });
 }
 
-// === UPLOAD MODEL (UNIFIED OVERLAY) ===
-document.getElementById("uploadModelBtn").onclick = () => {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".rvt,.zip,.nwd";
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+// === 4D Manual Task Creation ===
+let taskList = [];
+let editingTaskId = null;
 
-    showGlobalOverlay("Uploading model...", 0);
-    let fakeProgress = 0;
-    const simulate = setInterval(() => {
-      fakeProgress = Math.min(fakeProgress + Math.random() * 10, 90);
-      updateGlobalProgress(fakeProgress);
-    }, 300);
+// Modal Management
+const taskModal = document.getElementById("taskModal");
+const addTaskFloatingBtn = document.getElementById("addTaskFloatingBtn");
+const closeModalBtn = document.getElementById("closeModalBtn");
+const cancelTaskBtn = document.getElementById("cancelTaskBtn");
+const deleteTaskBtn = document.getElementById("deleteTaskBtn");
 
-    const form = new FormData();
-    form.append("model-file", file);
-    const resp = await fetch("/api/models", { method: "POST", body: form });
-    clearInterval(simulate);
+function openTaskModal(taskId = null) {
+  editingTaskId = taskId;
+  updateParentTaskOptions(taskId);
+  updateDependencyOptions(taskId);
 
-    if (!resp.ok) {
-      hideGlobalOverlay();
-      return showOverlay("Upload failed");
+  const modalTitle = document.getElementById("modalTitle");
+  const createBtnText = document.getElementById("createTaskBtnText");
+  const createBtnIcon = document.querySelector("#createTaskBtn i");
+
+  if (taskId) {
+    // Edit mode
+    const task = taskList.find(t => t.id === taskId);
+    if (task) {
+      document.getElementById("taskName").value = task.name;
+      document.getElementById("taskType").value = task.type;
+      document.getElementById("taskStart").value = task.start.toISOString().split('T')[0];
+      document.getElementById("taskEnd").value = task.end.toISOString().split('T')[0];
+      document.getElementById("parentTask").value = task.parentId || "";
+
+      // Set dependencies
+      const depSelect = document.getElementById("dependencies");
+      Array.from(depSelect.options).forEach(opt => {
+        opt.selected = task.dependencies && task.dependencies.includes(opt.value);
+      });
+
+      modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
+      createBtnText.textContent = 'Save Changes';
+      createBtnIcon.className = 'fas fa-save';
+      deleteTaskBtn.style.display = 'flex';
     }
-
-    const model = await resp.json();
-    updateGlobalProgress(90, "Translating model...");
-    pollTranslation(model.urn);
-  };
-  input.click();
-};
-
-async function pollTranslation(urn) {
-  const res = await fetch(`/api/models/${urn}/status`);
-  const data = await res.json();
-
-  if (data.status === "success") {
-    updateGlobalProgress(100, "Model ready — loading...");
-    setTimeout(() => initViewer(urn), 1000);
-  } else if (data.status === "inprogress") {
-    setTimeout(() => pollTranslation(urn), 3000);
   } else {
-    hideGlobalOverlay();
-    showOverlay("Translation failed");
+    // Create mode
+    modalTitle.innerHTML = '<i class="fas fa-tasks"></i> Create Task';
+    createBtnText.textContent = 'Create Task';
+    createBtnIcon.className = 'fas fa-plus-circle';
+    deleteTaskBtn.style.display = 'none';
   }
+
+  taskModal.classList.add("active");
 }
 
-// === SCHEDULE UPLOAD (UNIFIED OVERLAY) ===
-async function uploadSchedule(urn) {
+function closeTaskModal() {
+  taskModal.classList.remove("active");
+  editingTaskId = null;
+  clearTaskForm();
+}
+
+function clearTaskForm() {
+  document.getElementById("taskName").value = "";
+  document.getElementById("taskStart").value = "";
+  document.getElementById("taskEnd").value = "";
+  document.getElementById("parentTask").value = "";
+  document.getElementById("dependencies").selectedIndex = -1;
+  if (viewer) viewer.clearSelection();
+}
+
+function updateParentTaskOptions(excludeTaskId = null) {
+  const parentSelect = document.getElementById("parentTask");
+  parentSelect.innerHTML = '<option value="">None (Top-level task)</option>';
+
+  taskList.forEach(task => {
+    // Exclude current task (can't be its own parent) and its children
+    if (task.id !== excludeTaskId) {
+      const option = document.createElement("option");
+      option.value = task.id;
+      option.textContent = task.name;
+      parentSelect.appendChild(option);
+    }
+  });
+}
+
+function updateDependencyOptions(excludeTaskId = null) {
+  const depSelect = document.getElementById("dependencies");
+  depSelect.innerHTML = '';
+
+  taskList.forEach(task => {
+    // Exclude current task (can't depend on itself)
+    if (task.id !== excludeTaskId) {
+      const option = document.createElement("option");
+      option.value = task.id;
+      option.textContent = task.name;
+      depSelect.appendChild(option);
+    }
+  });
+}
+
+addTaskFloatingBtn.onclick = openTaskModal;
+closeModalBtn.onclick = closeTaskModal;
+cancelTaskBtn.onclick = closeTaskModal;
+
+// Close modal when clicking outside
+taskModal.onclick = (e) => {
+  if (e.target === taskModal) {
+    closeTaskModal();
+  }
+};
+
+document.getElementById("createTaskBtn").onclick = () => {
+  const nameInput = document.getElementById("taskName");
+  const typeInput = document.getElementById("taskType");
+  const startInput = document.getElementById("taskStart");
+  const endInput = document.getElementById("taskEnd");
+  const parentInput = document.getElementById("parentTask");
+  const dependenciesInput = document.getElementById("dependencies");
+
+  const name = nameInput.value.trim();
+  const type = typeInput.value;
+  const start = startInput.value;
+  const end = endInput.value;
+  const parentId = parentInput.value;
+  const selected = viewer?.getSelection() || [];
+
+  console.log('Creating task with:', { name, type, start, end, selected });
+
+  // Get selected dependencies
+  const dependencies = Array.from(dependenciesInput.selectedOptions)
+    .map(opt => opt.value)
+    .filter(id => id);
+
+  if (!name || !start || !end) {
+    showOverlay("⚠ Please fill all required fields (name, start, end).");
+    return;
+  }
+
+  // Validate dates
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (endDate < startDate) {
+    showOverlay("⚠ End date must be after start date.");
+    return;
+  }
+
+  if (editingTaskId) {
+    // Edit existing task
+    const task = taskList.find(t => t.id === editingTaskId);
+    if (task) {
+      // Update old parent's children if parent changed
+      if (task.parentId && task.parentId !== parentId) {
+        const oldParent = taskList.find(t => t.id == task.parentId);
+        if (oldParent && oldParent.children) {
+          oldParent.children = oldParent.children.filter(cid => cid !== editingTaskId);
+        }
+      }
+
+      task.name = name;
+      task.type = type;
+      task.start = startDate;
+      task.end = endDate;
+      task.elements = selected.length > 0 ? selected : task.elements;
+      task.parentId = parentId || null;
+      task.dependencies = dependencies;
+
+      // Add to new parent's children
+      if (parentId && parentId !== task.parentId) {
+        const newParent = taskList.find(t => t.id == parentId);
+        if (newParent) {
+          if (!newParent.children) newParent.children = [];
+          if (!newParent.children.includes(editingTaskId)) {
+            newParent.children.push(editingTaskId);
+          }
+        }
+      }
+
+      showOverlay(`✓ Task "${name}" updated successfully`);
+    }
+  } else {
+    // Create new task
+    const newTask = {
+      id: Date.now(),
+      name,
+      type,
+      start: startDate,
+      end: endDate,
+      elements: selected,
+      parentId: parentId || null,
+      dependencies: dependencies,
+      children: []
+    };
+
+    taskList.push(newTask);
+
+    console.log('Task added to taskList. Total tasks:', taskList.length);
+    console.log('New task:', newTask);
+
+    // If has parent, add to parent's children
+    if (parentId) {
+      const parent = taskList.find(t => t.id == parentId);
+      if (parent) {
+        if (!parent.children) parent.children = [];
+        parent.children.push(newTask.id);
+      }
+    }
+
+    showOverlay(`✓ Task "${name}" created with ${selected.length} object(s)`);
+  }
+
+  // Close modal and update UI
+  closeTaskModal();
+
+  // Always update both views
+  renderTimeline();
+  renderGanttChart();
+
+  // Update task count
+  const taskCountElement = document.getElementById("taskCount");
+  if (taskCountElement) taskCountElement.textContent = taskList.length;
+};
+
+// Delete Task
+deleteTaskBtn.onclick = () => {
+  if (!editingTaskId) return;
+
+  const task = taskList.find(t => t.id === editingTaskId);
+  if (!task) return;
+
+  if (confirm(`Are you sure you want to delete task "${task.name}"?`)) {
+    // Remove from parent's children
+    if (task.parentId) {
+      const parent = taskList.find(t => t.id == task.parentId);
+      if (parent && parent.children) {
+        parent.children = parent.children.filter(cid => cid !== editingTaskId);
+      }
+    }
+
+    // Remove task from list
+    taskList = taskList.filter(t => t.id !== editingTaskId);
+
+    // Remove references from other tasks' dependencies
+    taskList.forEach(t => {
+      if (t.dependencies) {
+        t.dependencies = t.dependencies.filter(dep => dep != editingTaskId);
+      }
+    });
+
+    closeTaskModal();
+    renderTimeline();
+    if (currentView === "gantt") {
+      renderGanttChart();
+    }
+    showOverlay(`✓ Task "${task.name}" deleted`);
+  }
+};
+
+// Current view state
+let currentView = "task"; // "task" or "gantt"
+
+function renderTimeline() {
+  console.log('renderTimeline called. Tasks:', taskList.length);
+
+  const container = document.getElementById("taskView");
+  if (!container) {
+    console.error('taskView container not found');
+    return;
+  }
+
+  container.innerHTML = "";
+
+  // Update task count
+  const taskCountElement = document.getElementById("taskCount");
+  if (taskCountElement) taskCountElement.textContent = taskList.length;
+
+  if (taskList.length === 0) {
+    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: #9CA3AF; font-size: 0.875rem;">No tasks created yet. Create your first task above!</div>';
+    return;
+  }
+
+  const allDates = taskList.flatMap((t) => [t.start, t.end]);
+  const minDate = new Date(Math.min(...allDates));
+  const maxDate = new Date(Math.max(...allDates));
+  const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
+
+  taskList.forEach((task, index) => {
+    const row = document.createElement("div");
+    row.className = "timeline-row";
+    row.style.animationDelay = `${index * 0.05}s`;
+
+    const bar = document.createElement("div");
+    bar.className = "timeline-bar";
+    bar.setAttribute("data-type", task.type);
+
+    const startOffset = (task.start - minDate) / (1000 * 60 * 60 * 24);
+    const duration = (task.end - task.start) / (1000 * 60 * 60 * 24);
+    bar.style.left = `${(startOffset / totalDays) * 100}%`;
+    bar.style.width = `${(duration / totalDays) * 100}%`;
+
+    // Add task name label
+    const label = document.createElement("span");
+    label.textContent = task.name;
+    label.style.whiteSpace = "nowrap";
+    label.style.overflow = "hidden";
+    label.style.textOverflow = "ellipsis";
+    bar.appendChild(label);
+
+    bar.title = `${task.name}: ${task.start.toDateString()} → ${task.end.toDateString()} (${task.elements.length} objects)\nClick to isolate objects | Double-click to edit`;
+
+    bar.onclick = () => {
+      if (task.elements && task.elements.length > 0) {
+        viewer.isolate(task.elements);
+        showOverlay(`✓ Viewing task: ${task.name} (${task.elements.length} objects)`);
+      } else {
+        showOverlay(`⚠ No objects associated with task: ${task.name}`);
+      }
+    };
+
+    bar.ondblclick = (e) => {
+      e.stopPropagation();
+      openTaskModal(task.id);
+    };
+
+    row.appendChild(bar);
+    container.appendChild(row);
+  });
+}
+
+// Calculate Critical Path
+function calculateCriticalPath() {
+  if (taskList.length === 0) return [];
+
+  // Calculate earliest start (ES) and earliest finish (EF)
+  const taskData = new Map();
+
+  taskList.forEach(task => {
+    taskData.set(task.id, {
+      task,
+      ES: null,
+      EF: null,
+      LS: null,
+      LF: null,
+      slack: null
+    });
+  });
+
+  // Forward pass - Calculate ES and EF
+  const visited = new Set();
+  const calculateES = (taskId) => {
+    if (visited.has(taskId)) return;
+    visited.add(taskId);
+
+    const data = taskData.get(taskId);
+    const task = data.task;
+
+    // If task has dependencies, ES is max EF of all predecessors
+    if (task.dependencies && task.dependencies.length > 0) {
+      let maxEF = 0;
+      task.dependencies.forEach(depId => {
+        const depIdNum = parseInt(depId);
+        if (taskData.has(depIdNum)) {
+          calculateES(depIdNum);
+          const depData = taskData.get(depIdNum);
+          if (depData.EF !== null && depData.EF > maxEF) {
+            maxEF = depData.EF;
+          }
+        }
+      });
+      data.ES = maxEF;
+    } else {
+      data.ES = 0;
+    }
+
+    const duration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
+    data.EF = data.ES + duration;
+  };
+
+  taskList.forEach(task => calculateES(task.id));
+
+  // Find project completion time
+  let projectCompletion = 0;
+  taskData.forEach(data => {
+    if (data.EF > projectCompletion) {
+      projectCompletion = data.EF;
+    }
+  });
+
+  // Backward pass - Calculate LS and LF
+  taskData.forEach(data => {
+    data.LF = projectCompletion;
+  });
+
+  const calculateLS = (taskId) => {
+    const data = taskData.get(taskId);
+    const task = data.task;
+
+    // Find tasks that depend on this task
+    const successors = taskList.filter(t =>
+      t.dependencies && t.dependencies.some(dep => parseInt(dep) === taskId)
+    );
+
+    if (successors.length > 0) {
+      let minLS = Infinity;
+      successors.forEach(succ => {
+        const succData = taskData.get(succ.id);
+        if (succData.LS !== null && succData.LS < minLS) {
+          minLS = succData.LS;
+        }
+      });
+      data.LF = minLS;
+    }
+
+    const duration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
+    data.LS = data.LF - duration;
+    data.slack = data.LS - data.ES;
+  };
+
+  // Calculate in reverse topological order
+  const reverseVisited = new Set();
+  const reverseCalculate = (taskId) => {
+    if (reverseVisited.has(taskId)) return;
+    reverseVisited.add(taskId);
+
+    const data = taskData.get(taskId);
+    const task = data.task;
+
+    // Process dependencies first
+    if (task.dependencies) {
+      task.dependencies.forEach(depId => {
+        const depIdNum = parseInt(depId);
+        if (taskData.has(depIdNum)) {
+          reverseCalculate(depIdNum);
+        }
+      });
+    }
+
+    calculateLS(taskId);
+  };
+
+  taskList.forEach(task => reverseCalculate(task.id));
+
+  // Critical path tasks have slack = 0
+  const criticalTasks = [];
+  taskData.forEach((data, taskId) => {
+    if (data.slack !== null && Math.abs(data.slack) < 0.1) {
+      criticalTasks.push(taskId);
+    }
+  });
+
+  return criticalTasks;
+}
+
+function renderGanttChart() {
+  console.log('renderGanttChart called. Tasks:', taskList.length);
+
+  const ganttBody = document.getElementById("ganttBody");
+  const ganttHeader = document.getElementById("ganttTimelineHeader");
+
+  if (!ganttBody || !ganttHeader) {
+    console.error('Gantt elements not found');
+    return;
+  }
+
+  // Clear existing content except SVG
+  const svg = document.getElementById("ganttDependencyLines");
+  ganttBody.innerHTML = "";
+  if (svg) ganttBody.appendChild(svg);
+  ganttHeader.innerHTML = "";
+
+  if (taskList.length === 0) {
+    ganttBody.innerHTML = `
+      <div class="gantt-empty">
+        <i class="fas fa-chart-gantt"></i>
+        <p>No tasks created yet. Create your first task above!</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Calculate critical path
+  const criticalPath = calculateCriticalPath();
+
+  // Calculate date range
+  const allDates = taskList.flatMap((t) => [t.start, t.end]);
+  const minDate = new Date(Math.min(...allDates));
+  const maxDate = new Date(Math.max(...allDates));
+
+  // Generate date columns
+  const dateColumns = [];
+  const currentDate = new Date(minDate);
+
+  while (currentDate <= maxDate) {
+    dateColumns.push(new Date(currentDate));
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // Render header dates
+  dateColumns.forEach((date) => {
+    const dateCol = document.createElement("div");
+    dateCol.className = "gantt-date-column";
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      dateCol.classList.add("weekend");
+    }
+    dateCol.innerHTML = `
+      <div>${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+      <div style="font-size: 0.65rem; color: #9CA3AF;">${date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+    `;
+    ganttHeader.appendChild(dateCol);
+  });
+
+  // Render tasks
+  taskList.forEach((task, index) => {
+    const row = document.createElement("div");
+    row.className = "gantt-row";
+    row.style.animationDelay = `${index * 0.05}s`;
+
+    // Task name column
+    const taskNameDiv = document.createElement("div");
+    taskNameDiv.className = "gantt-task-name";
+    taskNameDiv.innerHTML = `
+      <div class="task-title">
+        <span class="task-type-badge ${task.type.toLowerCase()}">${task.type === 'Build' ? '🏗️' : '💥'} ${task.type}</span>
+        ${task.name}
+      </div>
+      <div class="task-meta">
+        <span><i class="fas fa-calendar"></i> ${task.start.toLocaleDateString()} - ${task.end.toLocaleDateString()}</span>
+        <span><i class="fas fa-cube"></i> ${task.elements.length} objects</span>
+      </div>
+    `;
+
+    // Timeline column
+    const timelineDiv = document.createElement("div");
+    timelineDiv.className = "gantt-timeline";
+
+    const timelineGrid = document.createElement("div");
+    timelineGrid.className = "gantt-timeline-grid";
+
+    // Create cells for each date
+    dateColumns.forEach((date) => {
+      const cell = document.createElement("div");
+      cell.className = "gantt-timeline-cell";
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        cell.classList.add("weekend");
+      }
+      timelineGrid.appendChild(cell);
+    });
+
+    // Create bar container
+    const barContainer = document.createElement("div");
+    barContainer.className = "gantt-bar-container";
+
+    // Calculate bar position and width
+    const totalDays = dateColumns.length;
+    const taskStartIndex = dateColumns.findIndex(d => d.toDateString() === task.start.toDateString());
+    const taskEndIndex = dateColumns.findIndex(d => d.toDateString() === task.end.toDateString());
+
+    const startIndex = taskStartIndex >= 0 ? taskStartIndex : 0;
+    const endIndex = taskEndIndex >= 0 ? taskEndIndex : dateColumns.length - 1;
+    const duration = endIndex - startIndex + 1;
+
+    const bar = document.createElement("div");
+    bar.className = `gantt-bar ${task.type.toLowerCase()}`;
+    bar.style.left = `${(startIndex / totalDays) * 100}%`;
+    bar.style.width = `${(duration / totalDays) * 100}%`;
+    bar.dataset.taskId = task.id;
+    bar.dataset.rowIndex = index;
+
+    // Mark critical path tasks
+    if (criticalPath.includes(task.id)) {
+      bar.classList.add('critical');
+    }
+
+    const barLabel = document.createElement("span");
+    barLabel.className = "gantt-bar-label";
+    barLabel.textContent = task.name;
+    bar.appendChild(barLabel);
+
+    const criticalLabel = criticalPath.includes(task.id) ? ' [CRITICAL PATH]' : '';
+    bar.title = `${task.name}${criticalLabel}: ${task.start.toDateString()} → ${task.end.toDateString()} (${task.elements.length} objects)\nClick to isolate objects | Double-click to edit`;
+    bar.onclick = () => {
+      if (task.elements && task.elements.length > 0) {
+        viewer.isolate(task.elements);
+        showOverlay(`✓ Viewing task: ${task.name} (${task.elements.length} objects)`);
+      } else {
+        showOverlay(`⚠ No objects associated with task: ${task.name}`);
+      }
+    };
+
+    bar.ondblclick = (e) => {
+      e.stopPropagation();
+      openTaskModal(task.id);
+    };
+
+    barContainer.appendChild(bar);
+    timelineGrid.appendChild(barContainer);
+    timelineDiv.appendChild(timelineGrid);
+
+    row.appendChild(taskNameDiv);
+    row.appendChild(timelineDiv);
+    row.dataset.taskId = task.id;
+    ganttBody.appendChild(row);
+  });
+
+  // Draw dependency lines
+  drawDependencyLines(criticalPath);
+}
+
+function drawDependencyLines(criticalPath) {
+  const svg = document.getElementById('ganttDependencyLines');
+
+  // Clear existing lines
+  svg.innerHTML = `
+    <defs>
+      <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#4F46E5" />
+      </marker>
+      <marker id="arrowhead-critical" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#DC2626" />
+      </marker>
+    </defs>
+  `;
+
+  const ganttBody = document.getElementById('ganttBody');
+  const scrollTop = ganttBody.scrollTop;
+  const scrollLeft = ganttBody.scrollLeft;
+
+  // Update SVG size
+  svg.setAttribute('width', ganttBody.scrollWidth);
+  svg.setAttribute('height', ganttBody.scrollHeight);
+
+  taskList.forEach(task => {
+    if (!task.dependencies || task.dependencies.length === 0) return;
+
+    const taskRow = ganttBody.querySelector(`[data-task-id="${task.id}"]`);
+    if (!taskRow) return;
+
+    const taskBar = taskRow.querySelector('.gantt-bar');
+    if (!taskBar) return;
+
+    const taskRect = taskBar.getBoundingClientRect();
+    const bodyRect = ganttBody.getBoundingClientRect();
+
+    task.dependencies.forEach(depId => {
+      const depIdNum = parseInt(depId);
+      const depRow = ganttBody.querySelector(`[data-task-id="${depIdNum}"]`);
+      if (!depRow) return;
+
+      const depBar = depRow.querySelector('.gantt-bar');
+      if (!depBar) return;
+
+      const depRect = depBar.getBoundingClientRect();
+
+      // Calculate line coordinates relative to gantt body
+      const x1 = depRect.right - bodyRect.left + scrollLeft;
+      const y1 = depRect.top - bodyRect.top + depRect.height / 2 + scrollTop;
+      const x2 = taskRect.left - bodyRect.left + scrollLeft;
+      const y2 = taskRect.top - bodyRect.top + taskRect.height / 2 + scrollTop;
+
+      // Create path with arrow
+      const isCritical = criticalPath.includes(task.id) && criticalPath.includes(depIdNum);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+
+      // Create a smooth curved line
+      const midX = (x1 + x2) / 2;
+      const pathData = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+
+      line.setAttribute('d', pathData);
+      line.setAttribute('class', `gantt-dependency-line ${isCritical ? 'critical' : ''}`);
+      line.setAttribute('marker-end', `url(#${isCritical ? 'arrowhead-critical' : 'arrowhead'})`);
+
+      svg.appendChild(line);
+    });
+  });
+}
+
+// View toggle functionality
+document.getElementById("taskViewBtn").onclick = () => {
+  currentView = "task";
+  document.getElementById("taskView").classList.add("active");
+  document.getElementById("ganttView").classList.remove("active");
+  document.getElementById("taskViewBtn").classList.add("active");
+  document.getElementById("ganttViewBtn").classList.remove("active");
+  showOverlay("📊 Switched to Task View");
+};
+
+document.getElementById("ganttViewBtn").onclick = () => {
+  currentView = "gantt";
+  document.getElementById("ganttView").classList.add("active");
+  document.getElementById("taskView").classList.remove("active");
+  document.getElementById("ganttViewBtn").classList.add("active");
+  document.getElementById("taskViewBtn").classList.remove("active");
+  renderGanttChart();
+  showOverlay("📈 Switched to Gantt Chart View");
+};
+
+let isPlaying = false;
+let playInterval = null;
+
+document.getElementById("play4dBtn").onclick = () => {
+  const playBtn = document.getElementById("play4dBtn");
+
+  if (isPlaying) {
+    clearInterval(playInterval);
+    isPlaying = false;
+    playBtn.innerHTML = '<i class="fas fa-play"></i>';
+    showOverlay("⏸ Playback paused");
+    return;
+  }
+
+  if (taskList.length === 0) {
+    showOverlay("⚠ No tasks available. Create or import a schedule first.");
+    return;
+  }
+
+  const allDates = taskList.flatMap((t) => [t.start, t.end]);
+  const minDate = new Date(Math.min(...allDates));
+  const maxDate = new Date(Math.max(...allDates));
+  let current = new Date(minDate);
+
+  isPlaying = true;
+  playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+  showOverlay("▶ Starting 4D playback...");
+
+  playInterval = setInterval(() => {
+    const dateDisplay = document.getElementById("currentDate");
+    dateDisplay.textContent = current.toDateString();
+
+    // Find and isolate active tasks
+    const activeTasks = taskList.filter(
+      (task) => current >= task.start && current <= task.end
+    );
+
+    if (activeTasks.length > 0) {
+      const allElements = activeTasks.flatMap((t) => t.elements);
+      if (allElements.length > 0) {
+        viewer.isolate(allElements);
+      }
+    } else {
+      viewer.isolate([]);
+    }
+
+    current.setDate(current.getDate() + 1);
+
+    if (current > maxDate) {
+      clearInterval(playInterval);
+      isPlaying = false;
+      playBtn.innerHTML = '<i class="fas fa-play"></i>';
+      showOverlay("✓ Playback completed");
+      viewer.isolate();
+    }
+  }, 500);
+};
+
+// Upload Schedule Functionality
+document.getElementById("uploadScheduleBtn").onclick = async () => {
+  if (!currentUrn) {
+    showOverlay("⚠ Please select a model first before uploading a schedule.");
+    return;
+  }
+
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".csv";
+
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    showGlobalOverlay("Uploading schedule...", 10);
+    showOverlay("⏳ Uploading schedule...");
 
-    const form = new FormData();
-    form.append("schedule-file", file);
-    const resp = await fetch(`/api/schedule/${urn}`, {
-      method: "POST",
-      body: form,
-    });
+    try {
+      const form = new FormData();
+      form.append("schedule-file", file);
 
-    if (!resp.ok) {
-      hideGlobalOverlay();
-      return showOverlay("Schedule upload failed");
+      const resp = await fetch(`/api/schedule/${currentUrn}`, {
+        method: "POST",
+        body: form
+      });
+
+      const data = await resp.json();
+
+      if (data.ok && data.tasks) {
+        // Add uploaded tasks to taskList
+        data.tasks.forEach(task => {
+          taskList.push({
+            id: task.id || Date.now() + Math.random(),
+            name: task.name,
+            type: task.type || "Build",
+            start: new Date(task.start),
+            end: new Date(task.end),
+            elements: task.elements || []
+          });
+        });
+
+        // Update both views
+        renderTimeline();
+        if (currentView === "gantt") {
+          renderGanttChart();
+        }
+
+        showOverlay(`✓ Uploaded ${data.tasks.length} task(s) from schedule`);
+      } else {
+        showOverlay("❌ Failed to upload schedule. Please check the file format.");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      showOverlay("❌ Upload failed. Please try again.");
     }
-
-    const data = await resp.json();
-    updateGlobalProgress(100, `Schedule uploaded (${data.tasks.length} tasks)`);
-    hideGlobalOverlay();
-    schedule = data;
-    const viewerInstance = window.myViewer;
-    fourdExt = viewerInstance.getExtension("FourDPlayback");
-    fourdExt.initSchedule(schedule);
   };
-  input.click();
-}
 
-// === 4D ENHANCEMENT HOOKS ===
-document.getElementById("uploadScheduleBtn").onclick = async () => {
-  if (!currentUrn) return alert("Load a model first.");
-  await uploadSchedule(currentUrn);
+  input.click();
 };
 
-document.getElementById("playBtn").onclick = () => {
-  if (!fourdExt || !schedule) return alert("Upload schedule first");
-  fourdExt.play();
+// Export Dropdown Toggle
+const exportDropdown = document.querySelector('.export-dropdown');
+const exportDropdownBtn = document.getElementById('exportDropdownBtn');
+const exportMenu = document.getElementById('exportMenu');
+
+exportDropdownBtn.onclick = (e) => {
+  e.stopPropagation();
+  exportDropdown.classList.toggle('active');
+};
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!exportDropdown.contains(e.target)) {
+    exportDropdown.classList.remove('active');
+  }
+});
+
+// Excel Export Functionality
+document.getElementById("exportExcelBtn").onclick = () => {
+  exportDropdown.classList.remove('active');
+  if (taskList.length === 0) {
+    showOverlay("⚠ No tasks to export. Create some tasks first.");
+    return;
+  }
+
+  try {
+    // Prepare data for export
+    const exportData = taskList.map((task, index) => ({
+      "Task #": index + 1,
+      "Task Name": task.name,
+      "Type": task.type,
+      "Start Date": task.start.toLocaleDateString('en-US'),
+      "End Date": task.end.toLocaleDateString('en-US'),
+      "Duration (days)": Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1,
+      "Objects Count": task.elements.length,
+      "Object IDs": task.elements.join(", ") || "None"
+    }));
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+
+    // Create Task List worksheet
+    const ws1 = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    ws1['!cols'] = [
+      { wch: 8 },  // Task #
+      { wch: 30 }, // Task Name
+      { wch: 12 }, // Type
+      { wch: 15 }, // Start Date
+      { wch: 15 }, // End Date
+      { wch: 15 }, // Duration
+      { wch: 15 }, // Objects Count
+      { wch: 50 }  // Object IDs
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws1, "Task List");
+
+    // Create Gantt Chart data worksheet
+    const allDates = taskList.flatMap((t) => [t.start, t.end]);
+    const minDate = new Date(Math.min(...allDates));
+    const maxDate = new Date(Math.max(...allDates));
+
+    const dateColumns = [];
+    const currentDate = new Date(minDate);
+    while (currentDate <= maxDate) {
+      dateColumns.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Build Gantt data
+    const ganttData = [];
+
+    taskList.forEach(task => {
+      const row = {
+        "Task Name": task.name,
+        "Type": task.type,
+        "Start": task.start.toLocaleDateString('en-US'),
+        "End": task.end.toLocaleDateString('en-US'),
+        "Objects": task.elements.length
+      };
+
+      // Add date columns
+      dateColumns.forEach(date => {
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const isInRange = date >= task.start && date <= task.end;
+        row[dateStr] = isInRange ? "■" : "";
+      });
+
+      ganttData.push(row);
+    });
+
+    const ws2 = XLSX.utils.json_to_sheet(ganttData);
+
+    // Set column widths for Gantt
+    ws2['!cols'] = [
+      { wch: 30 }, // Task Name
+      { wch: 12 }, // Type
+      { wch: 15 }, // Start
+      { wch: 15 }, // End
+      { wch: 10 }, // Objects
+      ...dateColumns.map(() => ({ wch: 8 })) // Date columns
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws2, "Gantt Chart");
+
+    // Create summary worksheet
+    const summary = [
+      { "Metric": "Total Tasks", "Value": taskList.length },
+      { "Metric": "Build Tasks", "Value": taskList.filter(t => t.type === "Build").length },
+      { "Metric": "Demolish Tasks", "Value": taskList.filter(t => t.type === "Demolish").length },
+      { "Metric": "Total Objects", "Value": taskList.reduce((sum, t) => sum + t.elements.length, 0) },
+      { "Metric": "Project Start", "Value": minDate.toLocaleDateString('en-US') },
+      { "Metric": "Project End", "Value": maxDate.toLocaleDateString('en-US') },
+      { "Metric": "Project Duration", "Value": `${Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1} days` },
+      { "Metric": "Export Date", "Value": new Date().toLocaleDateString('en-US') + " " + new Date().toLocaleTimeString('en-US') }
+    ];
+
+    const ws3 = XLSX.utils.json_to_sheet(summary);
+    ws3['!cols'] = [{ wch: 25 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, ws3, "Summary");
+
+    // Generate filename
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `SA_4D_Schedule_${timestamp}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(wb, filename);
+
+    showOverlay(`✓ Exported to ${filename}`);
+
+    // Add export animation
+    const btn = document.getElementById("exportExcelBtn");
+    btn.style.transform = "scale(0.95)";
+    setTimeout(() => {
+      btn.style.transform = "";
+    }, 150);
+
+  } catch (error) {
+    console.error("Export error:", error);
+    showOverlay("❌ Export failed. Please try again.");
+  }
+};
+
+// ==========================================
+// Resizable Timeline Section
+// ==========================================
+
+let isResizing = false;
+let startY = 0;
+let startHeight = 0;
+
+const resizeHandle = document.getElementById('resizeHandle');
+const timelineSection = document.querySelector('.timeline-section');
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  startY = e.clientY;
+  startHeight = timelineSection.offsetHeight;
+
+  document.body.style.cursor = 'ns-resize';
+  document.body.style.userSelect = 'none';
+
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+
+  const deltaY = startY - e.clientY;
+  const newHeight = startHeight + deltaY;
+
+  // Apply constraints
+  const minHeight = 150;
+  const maxHeight = window.innerHeight - 300;
+  const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+
+  timelineSection.style.height = `${constrainedHeight}px`;
+
+  e.preventDefault();
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+
+    // Save preference to localStorage
+    localStorage.setItem('timelineHeight', timelineSection.offsetHeight);
+  }
+});
+
+// Restore saved height on load
+window.addEventListener('DOMContentLoaded', () => {
+  const savedHeight = localStorage.getItem('timelineHeight');
+  if (savedHeight) {
+    timelineSection.style.height = `${savedHeight}px`;
+  }
+});
+
+// 4D Animation Video Export
+document.getElementById("export4DBtn").onclick = async () => {
+  exportDropdown.classList.remove('active');
+
+  if (taskList.length === 0) {
+    showOverlay("⚠ No tasks to export. Create some tasks first.");
+    return;
+  }
+
+  if (!viewer) {
+    showOverlay("⚠ Please load a model first.");
+    return;
+  }
+
+  try {
+    showOverlay("🎬 Preparing to record 4D animation...");
+
+    // Calculate date range
+    const allDates = taskList.flatMap((t) => [t.start, t.end]);
+    const minDate = new Date(Math.min(...allDates));
+    const maxDate = new Date(Math.max(...allDates));
+    const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Setup MediaRecorder
+    const canvas = viewer.canvas;
+    const stream = canvas.captureStream(30); // 30 FPS
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm;codecs=vp9',
+      videoBitsPerSecond: 5000000 // 5 Mbps
+    });
+
+    const chunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      a.download = `SA_4D_Animation_${timestamp}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Hide recording indicator
+      document.getElementById('recordingIndicator').classList.remove('active');
+      showOverlay("✓ 4D animation exported successfully!");
+
+      // Restore viewer state
+      viewer.isolate();
+    };
+
+    // Start recording
+    mediaRecorder.start();
+
+    // Show recording indicator
+    document.getElementById('recordingIndicator').classList.add('active');
+    showOverlay("🔴 Recording started...");
+
+    // Animate through timeline
+    let current = new Date(minDate);
+    let frameCount = 0;
+    const framesPerDay = 30; // 1 second per day at 30 FPS
+    const totalFrames = totalDays * framesPerDay;
+
+    const animate = () => {
+      if (frameCount >= totalFrames) {
+        // Stop recording
+        mediaRecorder.stop();
+        return;
+      }
+
+      // Update current date
+      const progress = frameCount / totalFrames;
+      const daysPassed = Math.floor(progress * totalDays);
+      current = new Date(minDate);
+      current.setDate(current.getDate() + daysPassed);
+
+      // Find and isolate active tasks
+      const activeTasks = taskList.filter(
+        (task) => current >= task.start && current <= task.end
+      );
+
+      if (activeTasks.length > 0) {
+        const allElements = activeTasks.flatMap((t) => t.elements);
+        if (allElements.length > 0) {
+          viewer.isolate(allElements);
+        }
+      } else {
+        viewer.isolate([]);
+      }
+
+      frameCount++;
+      requestAnimationFrame(animate);
+    };
+
+    // Start animation
+    animate();
+
+  } catch (error) {
+    console.error("Video export error:", error);
+    document.getElementById('recordingIndicator').classList.remove('active');
+
+    if (error.name === 'NotSupportedError') {
+      showOverlay("❌ Video recording not supported in this browser. Try Chrome or Edge.");
+    } else {
+      showOverlay("❌ Failed to export animation. Please try again.");
+    }
+  }
 };
