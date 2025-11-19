@@ -656,15 +656,71 @@ function renderGanttChart() {
 
   ganttBody.appendChild(playbackMarker);
 
-  // Draw dependency lines
-  drawDependencyLines(criticalPath);
+  // Update SVG dimensions to match content
+  const svg = document.getElementById('ganttDependencyLines');
+  if (svg) {
+    // Set SVG size to match the full scrollable content
+    requestAnimationFrame(() => {
+      const timelineGrid = document.querySelector('.gantt-timeline-grid');
+      if (timelineGrid) {
+        const contentWidth = timelineGrid.scrollWidth || timelineGrid.offsetWidth;
+        const contentHeight = ganttBody.scrollHeight || ganttBody.offsetHeight;
+        svg.setAttribute('width', contentWidth);
+        svg.setAttribute('height', contentHeight);
+        svg.style.width = contentWidth + 'px';
+        svg.style.height = contentHeight + 'px';
+      }
+
+      // Draw dependency lines after layout is complete
+      drawDependencyLines(criticalPath);
+    });
+  }
 }
 
 function drawDependencyLines(criticalPath) {
   const svg = document.getElementById('ganttDependencyLines');
   if (!svg) return;
 
+  // Clear existing content
   svg.innerHTML = '';
+
+  // Add marker definitions for both regular and critical path arrows
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+  // Regular arrow marker
+  const regularMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  regularMarker.setAttribute('id', 'arrowhead-regular');
+  regularMarker.setAttribute('markerWidth', '10');
+  regularMarker.setAttribute('markerHeight', '10');
+  regularMarker.setAttribute('refX', '9');
+  regularMarker.setAttribute('refY', '3');
+  regularMarker.setAttribute('orient', 'auto');
+  const regularPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  regularPolygon.setAttribute('points', '0 0, 10 3, 0 6');
+  regularPolygon.setAttribute('fill', '#6B7280');
+  regularMarker.appendChild(regularPolygon);
+  defs.appendChild(regularMarker);
+
+  // Critical path arrow marker
+  const criticalMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  criticalMarker.setAttribute('id', 'arrowhead-critical');
+  criticalMarker.setAttribute('markerWidth', '10');
+  criticalMarker.setAttribute('markerHeight', '10');
+  criticalMarker.setAttribute('refX', '9');
+  criticalMarker.setAttribute('refY', '3');
+  criticalMarker.setAttribute('orient', 'auto');
+  const criticalPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  criticalPolygon.setAttribute('points', '0 0, 10 3, 0 6');
+  criticalPolygon.setAttribute('fill', '#DC2626');
+  criticalMarker.appendChild(criticalPolygon);
+  defs.appendChild(criticalMarker);
+
+  svg.appendChild(defs);
+
+  // Get scroll container for offset calculations
+  const ganttBodyScrollable = document.querySelector('.gantt-body-scrollable');
+  const scrollLeft = ganttBodyScrollable ? ganttBodyScrollable.scrollLeft : 0;
+  const scrollTop = ganttBodyScrollable ? ganttBodyScrollable.scrollTop : 0;
 
   // Draw dependency arrows between tasks
   taskList.forEach(task => {
@@ -680,51 +736,59 @@ function drawDependencyLines(criticalPath) {
 
       if (!predBar || !succBar) return;
 
-      // Get positions
+      // Get positions relative to the viewport
       const predRect = predBar.getBoundingClientRect();
       const succRect = succBar.getBoundingClientRect();
       const svgRect = svg.getBoundingClientRect();
 
-      // Calculate relative positions
-      const x1 = predRect.right - svgRect.left;
-      const y1 = predRect.top + predRect.height / 2 - svgRect.top;
-      const x2 = succRect.left - svgRect.left;
-      const y2 = succRect.top + succRect.height / 2 - svgRect.top;
+      // Calculate positions accounting for scroll
+      const x1 = predRect.right - svgRect.left + scrollLeft;
+      const y1 = predRect.top + predRect.height / 2 - svgRect.top + scrollTop;
+      const x2 = succRect.left - svgRect.left + scrollLeft;
+      const y2 = succRect.top + succRect.height / 2 - svgRect.top + scrollTop;
+
+      // Determine if this is a critical path dependency
+      const isCritical = criticalPath.includes(predId) && criticalPath.includes(task.id);
+      const color = isCritical ? '#DC2626' : '#6B7280';
+      const marker = isCritical ? 'url(#arrowhead-critical)' : 'url(#arrowhead-regular)';
+      const strokeWidth = isCritical ? '2.5' : '2';
 
       // Create path with right angle connectors (P6 style)
-      const midX = (x1 + x2) / 2;
+      // Add some offset for better visibility
+      const offsetX = 8;
+      const midX = x1 + (x2 - x1) * 0.5;
+
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      const pathData = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+
+      // Create a path that goes: right from predecessor -> down/up -> right to successor
+      let pathData;
+      if (Math.abs(y2 - y1) < 5) {
+        // Tasks on same row - simple horizontal line
+        pathData = `M ${x1 + offsetX} ${y1} L ${x2 - offsetX} ${y2}`;
+      } else {
+        // Tasks on different rows - use stepped path
+        pathData = `M ${x1 + offsetX} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2 - offsetX} ${y2}`;
+      }
 
       path.setAttribute('d', pathData);
-      path.setAttribute('stroke', criticalPath.includes(predId) && criticalPath.includes(task.id) ? '#DC2626' : '#6B7280');
-      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke', color);
+      path.setAttribute('stroke-width', strokeWidth);
       path.setAttribute('fill', 'none');
-      path.setAttribute('marker-end', 'url(#arrowhead)');
+      path.setAttribute('marker-end', marker);
+      path.setAttribute('opacity', '0.8');
+      path.classList.add('gantt-dependency-line');
+      if (isCritical) {
+        path.classList.add('critical');
+      }
+
+      // Add tooltip with task names
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${predecessor.name} → ${task.name}${isCritical ? ' (Critical Path)' : ''}`;
+      path.appendChild(title);
 
       svg.appendChild(path);
     });
   });
-
-  // Add arrowhead marker definition if it doesn't exist
-  if (!svg.querySelector('defs')) {
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    marker.setAttribute('id', 'arrowhead');
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '10');
-    marker.setAttribute('refX', '9');
-    marker.setAttribute('refY', '3');
-    marker.setAttribute('orient', 'auto');
-
-    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    polygon.setAttribute('points', '0 0, 10 3, 0 6');
-    polygon.setAttribute('fill', '#6B7280');
-
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-  }
 }
 
 // Synchronize scrolling between Gantt header and body
@@ -790,6 +854,16 @@ function setupGanttScrollSync() {
 // Call setup after DOM is loaded
 window.addEventListener('DOMContentLoaded', () => {
   setupGanttScrollSync();
+});
+
+// Redraw dependencies on window resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    const criticalPath = calculateCriticalPath();
+    drawDependencyLines(criticalPath);
+  }, 200);
 });
 
 // Gantt view is always active now (task view removed)
