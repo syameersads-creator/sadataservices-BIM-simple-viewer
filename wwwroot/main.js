@@ -896,8 +896,8 @@ document.addEventListener('mousemove', (e) => {
   const newHeight = startHeight + deltaY;
 
   // Apply constraints
-  const minHeight = 150;
-  const maxHeight = window.innerHeight - 300;
+  const minHeight = 200;
+  const maxHeight = window.innerHeight - 200;
   const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
 
   timelineSection.style.height = `${constrainedHeight}px`;
