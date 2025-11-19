@@ -138,6 +138,7 @@ async function initViewer(urn) {
 
 // === 4D Manual Task Creation ===
 let taskList = [];
+let nextTaskId = 1;
 let editingTaskId = null;
 
 // Modal Management
@@ -162,6 +163,7 @@ function openTaskModal(taskId = null) {
       document.getElementById("taskType").value = task.type;
       document.getElementById("taskStart").value = task.start.toISOString().split('T')[0];
       document.getElementById("taskEnd").value = task.end.toISOString().split('T')[0];
+      document.getElementById("taskDependencies").value = task.dependencies ? task.dependencies.join(', ') : '';
 
       modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
       createBtnText.textContent = 'Save Changes';
@@ -189,6 +191,7 @@ function clearTaskForm() {
   document.getElementById("taskName").value = "";
   document.getElementById("taskStart").value = "";
   document.getElementById("taskEnd").value = "";
+  document.getElementById("taskDependencies").value = "";
   if (viewer) viewer.clearSelection();
 }
 
@@ -223,12 +226,14 @@ createTaskBtn.onclick = () => {
   const typeInput = document.getElementById("taskType");
   const startInput = document.getElementById("taskStart");
   const endInput = document.getElementById("taskEnd");
+  const dependenciesInput = document.getElementById("taskDependencies");
 
   console.log('Form elements found:', {
     nameInput: !!nameInput,
     typeInput: !!typeInput,
     startInput: !!startInput,
-    endInput: !!endInput
+    endInput: !!endInput,
+    dependenciesInput: !!dependenciesInput
   });
 
   const name = nameInput.value.trim();
@@ -236,6 +241,12 @@ createTaskBtn.onclick = () => {
   const start = startInput.value;
   const end = endInput.value;
   const selected = viewer?.getSelection() || [];
+
+  // Parse dependencies (comma-separated task IDs)
+  const dependenciesStr = dependenciesInput.value.trim();
+  const dependencies = dependenciesStr ?
+    dependenciesStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) :
+    [];
 
   console.log('Form values:', { name, type, start, end, selected });
   console.log('Editing task ID:', editingTaskId);
@@ -266,6 +277,7 @@ createTaskBtn.onclick = () => {
       task.type = type;
       task.start = startDate;
       task.end = endDate;
+      task.dependencies = dependencies;
       task.elements = selected.length > 0 ? selected : task.elements;
 
       console.log('Task updated:', task);
@@ -277,11 +289,12 @@ createTaskBtn.onclick = () => {
     console.log('CREATE MODE - Adding new task');
     // Create new task
     const newTask = {
-      id: Date.now(),
+      id: nextTaskId++,
       name,
       type,
       start: startDate,
       end: endDate,
+      dependencies: dependencies,
       elements: selected
     };
 
@@ -299,10 +312,6 @@ createTaskBtn.onclick = () => {
   console.log('Closing modal...');
   // Close modal and update UI
   closeTaskModal();
-
-  console.log('Calling renderTimeline from modal...');
-  // Always update both views
-  renderTimeline();
 
   console.log('Calling renderGanttChart from modal...');
   renderGanttChart();
@@ -331,85 +340,16 @@ deleteTaskBtn.onclick = () => {
     taskList = taskList.filter(t => t.id !== editingTaskId);
 
     closeTaskModal();
-    renderTimeline();
-    if (currentView === "gantt") {
-      renderGanttChart();
-    }
+    renderGanttChart();
     updateDebugInfo();
     showOverlay(`✓ Task "${task.name}" deleted`);
   }
 };
 
 // Current view state
-let currentView = "task"; // "task" or "gantt"
+let currentView = "gantt"; // Always gantt view now
 
-function renderTimeline() {
-  console.log('renderTimeline called. Tasks:', taskList.length);
-
-  const container = document.getElementById("taskView");
-  if (!container) {
-    console.error('taskView container not found');
-    return;
-  }
-
-  container.innerHTML = "";
-
-  // Update task count
-  const taskCountElement = document.getElementById("taskCount");
-  if (taskCountElement) taskCountElement.textContent = taskList.length;
-
-  if (taskList.length === 0) {
-    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: #9CA3AF; font-size: 0.875rem;">No tasks created yet. Create your first task above!</div>';
-    return;
-  }
-
-  const allDates = taskList.flatMap((t) => [t.start, t.end]);
-  const minDate = new Date(Math.min(...allDates));
-  const maxDate = new Date(Math.max(...allDates));
-  const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
-
-  taskList.forEach((task, index) => {
-    const row = document.createElement("div");
-    row.className = "timeline-row";
-    row.style.animationDelay = `${index * 0.05}s`;
-
-    const bar = document.createElement("div");
-    bar.className = "timeline-bar";
-    bar.setAttribute("data-type", task.type);
-
-    const startOffset = (task.start - minDate) / (1000 * 60 * 60 * 24);
-    const duration = (task.end - task.start) / (1000 * 60 * 60 * 24);
-    bar.style.left = `${(startOffset / totalDays) * 100}%`;
-    bar.style.width = `${(duration / totalDays) * 100}%`;
-
-    // Add task name label
-    const label = document.createElement("span");
-    label.textContent = task.name;
-    label.style.whiteSpace = "nowrap";
-    label.style.overflow = "hidden";
-    label.style.textOverflow = "ellipsis";
-    bar.appendChild(label);
-
-    bar.title = `${task.name}: ${task.start.toDateString()} → ${task.end.toDateString()} (${task.elements.length} objects)\nClick to isolate objects | Double-click to edit`;
-
-    bar.onclick = () => {
-      if (task.elements && task.elements.length > 0) {
-        viewer.isolate(task.elements);
-        showOverlay(`✓ Viewing task: ${task.name} (${task.elements.length} objects)`);
-      } else {
-        showOverlay(`⚠ No objects associated with task: ${task.name}`);
-      }
-    };
-
-    bar.ondblclick = (e) => {
-      e.stopPropagation();
-      openTaskModal(task.id);
-    };
-
-    row.appendChild(bar);
-    container.appendChild(row);
-  });
-}
+// renderTimeline function removed - using Gantt view only
 
 // Calculate Critical Path
 // Note: Without dependencies, critical path calculation is simplified
@@ -483,20 +423,36 @@ function renderGanttChart() {
     const row = document.createElement("div");
     row.className = "gantt-row";
     row.style.animationDelay = `${index * 0.05}s`;
+    row.dataset.taskId = task.id;
 
-    // Task name column
-    const taskNameDiv = document.createElement("div");
-    taskNameDiv.className = "gantt-task-name";
-    taskNameDiv.innerHTML = `
-      <div class="task-title">
-        <span class="task-type-badge ${task.type.toLowerCase()}">${task.type === 'Build' ? '🏗️' : '💥'} ${task.type}</span>
-        ${task.name}
-      </div>
-      <div class="task-meta">
-        <span><i class="fas fa-calendar"></i> ${task.start.toLocaleDateString()} - ${task.end.toLocaleDateString()}</span>
-        <span><i class="fas fa-cube"></i> ${task.elements.length} objects</span>
-      </div>
+    // Task ID column
+    const taskIdCell = document.createElement("div");
+    taskIdCell.className = "gantt-row-cell";
+    taskIdCell.textContent = task.id;
+
+    // Task Name column
+    const taskNameCell = document.createElement("div");
+    taskNameCell.className = "gantt-row-cell";
+    taskNameCell.style.justifyContent = "flex-start";
+    taskNameCell.innerHTML = `
+      <span class="task-type-badge ${task.type.toLowerCase()}" style="margin-right: 8px;">${task.type === 'Build' ? '🏗️' : '💥'}</span>
+      <span style="font-weight: 500; color: var(--text-primary);">${task.name}</span>
     `;
+
+    // Planned Start column
+    const startCell = document.createElement("div");
+    startCell.className = "gantt-row-cell";
+    startCell.textContent = task.start.toLocaleDateString();
+
+    // Planned End column
+    const endCell = document.createElement("div");
+    endCell.className = "gantt-row-cell";
+    endCell.textContent = task.end.toLocaleDateString();
+
+    // Dependencies column
+    const depsCell = document.createElement("div");
+    depsCell.className = "gantt-row-cell";
+    depsCell.textContent = task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(', ') : '-';
 
     // Timeline column
     const timelineDiv = document.createElement("div");
@@ -566,9 +522,14 @@ function renderGanttChart() {
     timelineGrid.appendChild(barContainer);
     timelineDiv.appendChild(timelineGrid);
 
-    row.appendChild(taskNameDiv);
+    // Append all cells to row
+    row.appendChild(taskIdCell);
+    row.appendChild(taskNameCell);
+    row.appendChild(startCell);
+    row.appendChild(endCell);
+    row.appendChild(depsCell);
     row.appendChild(timelineDiv);
-    row.dataset.taskId = task.id;
+
     ganttBody.appendChild(row);
   });
 
@@ -584,26 +545,7 @@ function drawDependencyLines(criticalPath) {
   }
 }
 
-// View toggle functionality
-document.getElementById("taskViewBtn").onclick = () => {
-  currentView = "task";
-  document.getElementById("taskView").classList.add("active");
-  document.getElementById("ganttView").classList.remove("active");
-  document.getElementById("taskViewBtn").classList.add("active");
-  document.getElementById("ganttViewBtn").classList.remove("active");
-  renderTimeline();
-  showOverlay("📊 Switched to Task View");
-};
-
-document.getElementById("ganttViewBtn").onclick = () => {
-  currentView = "gantt";
-  document.getElementById("ganttView").classList.add("active");
-  document.getElementById("taskView").classList.remove("active");
-  document.getElementById("ganttViewBtn").classList.add("active");
-  document.getElementById("taskViewBtn").classList.remove("active");
-  renderGanttChart();
-  showOverlay("📈 Switched to Gantt Chart View");
-};
+// Gantt view is always active now (task view removed)
 
 let isPlaying = false;
 let playInterval = null;
@@ -695,20 +637,18 @@ document.getElementById("uploadScheduleBtn").onclick = async () => {
         // Add uploaded tasks to taskList
         data.tasks.forEach(task => {
           taskList.push({
-            id: task.id || Date.now() + Math.random(),
+            id: task.id || nextTaskId++,
             name: task.name,
             type: task.type || "Build",
             start: new Date(task.start),
             end: new Date(task.end),
+            dependencies: task.dependencies || [],
             elements: task.elements || []
           });
         });
 
-        // Update both views
-        renderTimeline();
-        if (currentView === "gantt") {
-          renderGanttChart();
-        }
+        // Update Gantt view
+        renderGanttChart();
 
         showOverlay(`✓ Uploaded ${data.tasks.length} task(s) from schedule`);
       } else {
@@ -750,13 +690,14 @@ document.getElementById("exportExcelBtn").onclick = () => {
 
   try {
     // Prepare data for export
-    const exportData = taskList.map((task, index) => ({
-      "Task #": index + 1,
+    const exportData = taskList.map((task) => ({
+      "Task ID": task.id,
       "Task Name": task.name,
       "Type": task.type,
       "Start Date": task.start.toLocaleDateString('en-US'),
       "End Date": task.end.toLocaleDateString('en-US'),
       "Duration (days)": Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1,
+      "Dependencies": task.dependencies && task.dependencies.length > 0 ? task.dependencies.join(", ") : "None",
       "Objects Count": task.elements.length,
       "Object IDs": task.elements.join(", ") || "None"
     }));
@@ -769,12 +710,13 @@ document.getElementById("exportExcelBtn").onclick = () => {
 
     // Set column widths
     ws1['!cols'] = [
-      { wch: 8 },  // Task #
+      { wch: 10 }, // Task ID
       { wch: 30 }, // Task Name
       { wch: 12 }, // Type
       { wch: 15 }, // Start Date
       { wch: 15 }, // End Date
       { wch: 15 }, // Duration
+      { wch: 20 }, // Dependencies
       { wch: 15 }, // Objects Count
       { wch: 50 }  // Object IDs
     ];

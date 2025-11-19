@@ -110,6 +110,14 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label for="taskDependencies">
+              <i class="fas fa-link"></i> Dependencies
+              <span style="font-size: 0.85em; color: #6B7280; font-weight: normal;">(comma-separated Task IDs)</span>
+            </label>
+            <input id="taskDependencies" type="text" class="modern-input" placeholder="e.g., 1, 2, 3" />
+          </div>
+
           <div class="selection-info">
             <i class="fas fa-mouse-pointer"></i>
             <span>Selected objects: <strong id="selectedCount">0</strong></span>
@@ -160,17 +168,6 @@
           </div>
 
           <div class="view-controls">
-            <div class="view-toggle">
-              <button id="taskViewBtn" class="view-btn active" data-view="task">
-                <i class="fas fa-bars"></i>
-                <span>Task View</span>
-              </button>
-              <button id="ganttViewBtn" class="view-btn" data-view="gantt">
-                <i class="fas fa-chart-gantt"></i>
-                <span>Gantt Chart</span>
-              </button>
-            </div>
-
             <!-- Export Dropdown -->
             <div class="export-dropdown">
               <button id="exportDropdownBtn" class="export-btn">
@@ -205,13 +202,14 @@
           </div>
         </div>
 
-        <!-- Task View (Timeline) -->
-        <div id="taskView" class="timeline-body view-container active"></div>
-
         <!-- Gantt Chart View -->
-        <div id="ganttView" class="gantt-container view-container">
+        <div id="ganttView" class="gantt-container view-container active">
           <div class="gantt-header">
-            <div class="gantt-sidebar">Task Name</div>
+            <div class="gantt-columns-header">Task ID</div>
+            <div class="gantt-columns-header">Task Name</div>
+            <div class="gantt-columns-header">Planned Start</div>
+            <div class="gantt-columns-header">Planned End</div>
+            <div class="gantt-columns-header">Dependencies</div>
             <div class="gantt-timeline-header" id="ganttTimelineHeader"></div>
           </div>
           <div class="gantt-body" id="ganttBody">
