@@ -226,11 +226,28 @@ function updateDebugInfo() {
   }
 }
 
-document.getElementById("createTaskBtn").onclick = () => {
+// Attach modal create button handler
+const createTaskBtn = document.getElementById("createTaskBtn");
+console.log('Modal create button found:', !!createTaskBtn);
+
+if (!createTaskBtn) {
+  console.error('ERROR: Could not find createTaskBtn element!');
+}
+
+createTaskBtn.onclick = () => {
+  console.log('=== MODAL FORM SUBMISSION ===');
+
   const nameInput = document.getElementById("taskName");
   const typeInput = document.getElementById("taskType");
   const startInput = document.getElementById("taskStart");
   const endInput = document.getElementById("taskEnd");
+
+  console.log('Form elements found:', {
+    nameInput: !!nameInput,
+    typeInput: !!typeInput,
+    startInput: !!startInput,
+    endInput: !!endInput
+  });
 
   const name = nameInput.value.trim();
   const type = typeInput.value;
@@ -238,9 +255,12 @@ document.getElementById("createTaskBtn").onclick = () => {
   const end = endInput.value;
   const selected = viewer?.getSelection() || [];
 
-  console.log('Creating task with:', { name, type, start, end, selected });
+  console.log('Form values:', { name, type, start, end, selected });
+  console.log('Editing task ID:', editingTaskId);
+  console.log('Current taskList length BEFORE:', taskList.length);
 
   if (!name || !start || !end) {
+    console.log('Validation failed: missing required fields');
     showOverlay("⚠ Please fill all required fields (name, start, end).");
     return;
   }
@@ -248,24 +268,31 @@ document.getElementById("createTaskBtn").onclick = () => {
   // Validate dates
   const startDate = new Date(start);
   const endDate = new Date(end);
+  console.log('Parsed dates:', { startDate, endDate });
   if (endDate < startDate) {
     showOverlay("⚠ End date must be after start date.");
     return;
   }
 
   if (editingTaskId) {
+    console.log('EDIT MODE - Updating existing task');
     // Edit existing task
     const task = taskList.find(t => t.id === editingTaskId);
     if (task) {
+      console.log('Found task to edit:', task);
       task.name = name;
       task.type = type;
       task.start = startDate;
       task.end = endDate;
       task.elements = selected.length > 0 ? selected : task.elements;
 
+      console.log('Task updated:', task);
       showOverlay(`✓ Task "${name}" updated successfully`);
+    } else {
+      console.error('ERROR: Could not find task with ID:', editingTaskId);
     }
   } else {
+    console.log('CREATE MODE - Adding new task');
     // Create new task
     const newTask = {
       id: Date.now(),
@@ -276,27 +303,38 @@ document.getElementById("createTaskBtn").onclick = () => {
       elements: selected
     };
 
+    console.log('New task object created:', newTask);
+
     taskList.push(newTask);
 
-    console.log('Task added to taskList. Total tasks:', taskList.length);
-    console.log('New task:', newTask);
+    console.log('Task added to taskList!');
+    console.log('Total tasks AFTER:', taskList.length);
+    console.log('Full taskList:', taskList);
 
     showOverlay(`✓ Task "${name}" created with ${selected.length} object(s)`);
   }
 
+  console.log('Closing modal...');
   // Close modal and update UI
   closeTaskModal();
 
+  console.log('Calling renderTimeline from modal...');
   // Always update both views
   renderTimeline();
+
+  console.log('Calling renderGanttChart from modal...');
   renderGanttChart();
 
   // Update task count
   const taskCountElement = document.getElementById("taskCount");
-  if (taskCountElement) taskCountElement.textContent = taskList.length;
+  if (taskCountElement) {
+    taskCountElement.textContent = taskList.length;
+    console.log('Updated task count display to:', taskList.length);
+  }
 
   // Update debug info
   updateDebugInfo();
+  console.log('Modal submission complete!');
 };
 
 // Delete Task
