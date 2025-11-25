@@ -811,6 +811,42 @@ html, body {
   text-align: center;
 }
 
+.help-tip-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--spacing-sm) 0;
+}
+
+.help-tip-note {
+  align-items: flex-start;
+  background: var(--bg-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+}
+
+.help-tip-note i {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.help-tip-note .fa-exclamation-triangle {
+  color: #F59E0B;
+}
+
+.tip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.tip-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
 /* ==========================================
    Resize Handle
    ========================================== */
