@@ -377,6 +377,36 @@ deleteTaskBtn.onclick = () => {
   }
 };
 
+// Delete All Tasks
+const deleteAllTasksBtn = document.getElementById("deleteAllTasksBtn");
+if (deleteAllTasksBtn) {
+  deleteAllTasksBtn.onclick = () => {
+    if (taskList.length === 0) {
+      showOverlay("⚠ No tasks to delete");
+      return;
+    }
+
+    const taskCount = taskList.length;
+    if (confirm(`Are you sure you want to delete all ${taskCount} task(s)? This action cannot be undone.`)) {
+      // Clear all tasks
+      taskList = [];
+
+      // Reset task ID counter
+      nextTaskId = 1;
+
+      // Reset viewer isolation
+      if (viewer) {
+        viewer.isolate();
+      }
+
+      // Update UI
+      renderGanttChart();
+      updateDebugInfo();
+      showOverlay(`✓ All ${taskCount} task(s) deleted`);
+    }
+  };
+}
+
 // Current view state
 let currentView = "gantt"; // Always gantt view now
 

@@ -808,6 +808,31 @@ html, body {
   font-weight: 700;
 }
 
+.btn-delete-all {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-all:hover {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: white;
+}
+
+.btn-delete-all i {
+  font-size: 0.875rem;
+}
+
 .timeline-body {
   flex: 1;
   overflow-y: auto;
