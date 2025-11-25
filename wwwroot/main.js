@@ -909,9 +909,9 @@ document.getElementById("play4dBtn").onclick = () => {
       }
     }
 
-    // Find and isolate active tasks
+    // Find and isolate tasks that have started (persist visibility after task ends)
     const activeTasks = taskList.filter(
-      (task) => current >= task.start && current <= task.end
+      (task) => current >= task.start
     );
 
     if (activeTasks.length > 0) {
@@ -1286,9 +1286,9 @@ document.getElementById("export4DBtn").onclick = async () => {
       current = new Date(minDate);
       current.setDate(current.getDate() + daysPassed);
 
-      // Find and isolate active tasks
+      // Find and isolate tasks that have started (persist visibility after task ends)
       const activeTasks = taskList.filter(
-        (task) => current >= task.start && current <= task.end
+        (task) => current >= task.start
       );
 
       if (activeTasks.length > 0) {
