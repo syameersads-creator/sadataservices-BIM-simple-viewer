@@ -729,40 +729,56 @@ html, body {
   background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
 }
 
-/* Help Tips Overlay */
-.help-tips {
-  position: absolute;
-  top: var(--spacing-lg);
-  left: var(--spacing-lg);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  padding: var(--spacing-md);
-  z-index: 10;
-  max-width: 280px;
-  border: 1px solid var(--border);
-}
-
-.help-tips-header {
+/* Header Tooltips */
+.header-tooltips {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-  font-weight: 600;
-  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-md);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
   font-size: 0.875rem;
+  font-weight: 500;
 }
 
-.help-tips-header i {
-  color: #F59E0B;
+.header-tooltips:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.header-tooltips > i {
+  color: #FCD34D;
   font-size: 1rem;
 }
 
-.help-tips-content {
+.tooltips-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: var(--spacing-md);
+  min-width: 280px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+  border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+}
+
+.header-tooltips:hover .tooltips-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .help-tip-item {
@@ -771,6 +787,7 @@ html, body {
   gap: var(--spacing-sm);
   font-size: 0.8125rem;
   color: var(--text-secondary);
+  padding: var(--spacing-sm) 0;
 }
 
 .help-tip-item kbd {
