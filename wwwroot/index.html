@@ -35,10 +35,20 @@
           <i class="fas fa-upload"></i>
           Upload Model
         </button>
-        <button id="uploadScheduleBtn" class="modern-btn secondary">
-          <i class="fas fa-calendar-plus"></i>
-          Upload Schedule
-        </button>
+        <div class="button-with-tooltip">
+          <button id="uploadScheduleBtn" class="modern-btn secondary">
+            <i class="fas fa-calendar-plus"></i>
+            Upload Schedule
+          </button>
+          <div class="info-tooltip">
+            <i class="fas fa-circle-info"></i>
+            <div class="tooltip-content">
+              <div class="tooltip-title">Upload Schedule Template</div>
+              <p>Need a template? <a href="#" id="downloadTemplateLink" class="template-link">Download Excel template</a></p>
+              <p class="tooltip-hint">Upload an Excel file with your project schedule</p>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -157,6 +167,24 @@
       <!-- Center - 3D Viewer -->
       <main class="viewer-section">
         <div id="viewer" class="viewer"></div>
+
+        <!-- Help Tips Overlay -->
+        <div class="help-tips">
+          <div class="help-tips-header">
+            <i class="fas fa-lightbulb"></i>
+            <span>Quick Tips</span>
+          </div>
+          <div class="help-tips-content">
+            <div class="help-tip-item">
+              <kbd>Shift</kbd>
+              <span>Select multiple components</span>
+            </div>
+            <div class="help-tip-item">
+              <i class="fas fa-mouse-pointer"></i>
+              <span>Double-click task bar to edit</span>
+            </div>
+          </div>
+        </div>
       </main>
 
       <!-- Resize Handle -->
