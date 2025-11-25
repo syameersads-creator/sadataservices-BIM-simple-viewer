@@ -21,6 +21,33 @@
           <i class="fas fa-cube"></i>
           <span>S&A 4D Viewer</span>
         </div>
+        <div class="header-tooltips">
+          <i class="fas fa-lightbulb"></i>
+          <span>Tooltips</span>
+          <div class="tooltips-dropdown">
+            <div class="help-tip-item">
+              <kbd>Shift</kbd>
+              <span>Select multiple components</span>
+            </div>
+            <div class="help-tip-item">
+              <i class="fas fa-mouse-pointer"></i>
+              <span>Double-click task bar to edit</span>
+            </div>
+            <div class="help-tip-divider"></div>
+            <div class="help-tip-item help-tip-note">
+              <i class="fas fa-info-circle"></i>
+              <div class="tip-text">
+                <strong>Removing Models:</strong> Select desired models, double-click the task, and save. Unselected models will be removed.
+              </div>
+            </div>
+            <div class="help-tip-item help-tip-note">
+              <i class="fas fa-exclamation-triangle"></i>
+              <div class="tip-text">
+                <strong>Adding Models:</strong> Editing only removes models. To add models, create a new task and delete the old one.
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="header-right">
         <div class="model-controls">
@@ -35,10 +62,20 @@
           <i class="fas fa-upload"></i>
           Upload Model
         </button>
-        <button id="uploadScheduleBtn" class="modern-btn secondary">
-          <i class="fas fa-calendar-plus"></i>
-          Upload Schedule
-        </button>
+        <div class="button-with-tooltip">
+          <button id="uploadScheduleBtn" class="modern-btn secondary">
+            <i class="fas fa-calendar-plus"></i>
+            Upload Schedule
+          </button>
+          <div class="info-tooltip">
+            <i class="fas fa-circle-info"></i>
+            <div class="tooltip-content">
+              <div class="tooltip-title">Upload Schedule Template</div>
+              <p>Need a template? <a href="#" id="downloadTemplateLink" class="template-link">Download Excel template</a></p>
+              <p class="tooltip-hint">Upload an Excel file with your project schedule</p>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -209,6 +246,10 @@
               <i class="fas fa-list-check"></i>
               <span id="taskCount">0</span> Tasks
             </span>
+            <button id="deleteAllTasksBtn" class="btn-delete-all" title="Delete all tasks">
+              <i class="fas fa-trash-alt"></i>
+              Delete All
+            </button>
           </div>
         </div>
 

@@ -377,6 +377,36 @@ deleteTaskBtn.onclick = () => {
   }
 };
 
+// Delete All Tasks
+const deleteAllTasksBtn = document.getElementById("deleteAllTasksBtn");
+if (deleteAllTasksBtn) {
+  deleteAllTasksBtn.onclick = () => {
+    if (taskList.length === 0) {
+      showOverlay("⚠ No tasks to delete");
+      return;
+    }
+
+    const taskCount = taskList.length;
+    if (confirm(`Are you sure you want to delete all ${taskCount} task(s)? This action cannot be undone.`)) {
+      // Clear all tasks
+      taskList = [];
+
+      // Reset task ID counter
+      nextTaskId = 1;
+
+      // Reset viewer isolation
+      if (viewer) {
+        viewer.isolate();
+      }
+
+      // Update UI
+      renderGanttChart();
+      updateDebugInfo();
+      showOverlay(`✓ All ${taskCount} task(s) deleted`);
+    }
+  };
+}
+
 // Current view state
 let currentView = "gantt"; // Always gantt view now
 
@@ -909,9 +939,9 @@ document.getElementById("play4dBtn").onclick = () => {
       }
     }
 
-    // Find and isolate active tasks
+    // Find and isolate tasks that have started (persist visibility after task ends)
     const activeTasks = taskList.filter(
-      (task) => current >= task.start && current <= task.end
+      (task) => current >= task.start
     );
 
     if (activeTasks.length > 0) {
@@ -998,6 +1028,42 @@ document.getElementById("uploadScheduleBtn").onclick = async () => {
 
   input.click();
 };
+
+// Download Template Link
+const downloadTemplateLink = document.getElementById("downloadTemplateLink");
+if (downloadTemplateLink) {
+  downloadTemplateLink.onclick = (e) => {
+    e.preventDefault();
+
+    // Create a sample CSV template
+    const templateData = [
+      ["Task Name", "Type", "Start Date", "End Date", "Dependencies", "Elements"],
+      ["Foundation Work", "Build", "2024-01-01", "2024-01-15", "", "1,2,3"],
+      ["Framing", "Build", "2024-01-16", "2024-02-01", "1", "4,5,6"],
+      ["Electrical", "Build", "2024-02-02", "2024-02-15", "2", "7,8,9"],
+      ["Plumbing", "Build", "2024-02-02", "2024-02-15", "2", "10,11,12"],
+      ["Drywall", "Build", "2024-02-16", "2024-02-28", "3,4", "13,14,15"],
+      ["Painting", "Build", "2024-03-01", "2024-03-10", "5", "16,17,18"]
+    ];
+
+    // Convert to CSV string
+    const csvContent = templateData.map(row => row.join(",")).join("\n");
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute("href", url);
+    link.setAttribute("download", "schedule_template.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showOverlay("✓ Template downloaded successfully");
+  };
+}
 
 // Export Dropdown Toggle
 const exportDropdown = document.querySelector('.export-dropdown');
@@ -1286,9 +1352,9 @@ document.getElementById("export4DBtn").onclick = async () => {
       current = new Date(minDate);
       current.setDate(current.getDate() + daysPassed);
 
-      // Find and isolate active tasks
+      // Find and isolate tasks that have started (persist visibility after task ends)
       const activeTasks = taskList.filter(
-        (task) => current >= task.start && current <= task.end
+        (task) => current >= task.start
       );
 
       if (activeTasks.length > 0) {

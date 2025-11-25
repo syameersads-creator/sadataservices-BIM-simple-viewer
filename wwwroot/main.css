@@ -188,6 +188,88 @@ html, body {
   transform: rotate(180deg);
 }
 
+/* Button with Tooltip */
+.button-with-tooltip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+}
+
+.info-tooltip > i {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  transition: color 0.2s ease;
+}
+
+.info-tooltip:hover > i {
+  color: white;
+}
+
+.tooltip-content {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: var(--spacing-md);
+  min-width: 280px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+  border: 1px solid var(--border);
+}
+
+.info-tooltip:hover .tooltip-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.tooltip-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.875rem;
+}
+
+.tooltip-content p {
+  margin: var(--spacing-sm) 0;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.tooltip-hint {
+  font-size: 0.75rem !important;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.template-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.template-link:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
 /* ==========================================
    Modern Select & Inputs
    ========================================== */
@@ -647,6 +729,124 @@ html, body {
   background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
 }
 
+/* Header Tooltips */
+.header-tooltips {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: var(--radius-md);
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.header-tooltips:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.header-tooltips > i {
+  color: #FCD34D;
+  font-size: 1rem;
+}
+
+.tooltips-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  padding: var(--spacing-md);
+  min-width: 280px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.header-tooltips:hover .tooltips-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.help-tip-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) 0;
+}
+
+.help-tip-item kbd {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  min-width: 32px;
+  text-align: center;
+}
+
+.help-tip-item i {
+  color: var(--primary);
+  font-size: 0.875rem;
+  width: 16px;
+  text-align: center;
+}
+
+.help-tip-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--spacing-sm) 0;
+}
+
+.help-tip-note {
+  align-items: flex-start;
+  background: var(--bg-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary);
+}
+
+.help-tip-note i {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.help-tip-note .fa-exclamation-triangle {
+  color: #F59E0B;
+}
+
+.tip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+.tip-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
 /* ==========================================
    Resize Handle
    ========================================== */
@@ -806,6 +1006,31 @@ html, body {
 .stat-item span {
   color: var(--primary);
   font-weight: 700;
+}
+
+.btn-delete-all {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-all:hover {
+  background: #ef4444;
+  border-color: #dc2626;
+  color: white;
+}
+
+.btn-delete-all i {
+  font-size: 0.875rem;
 }
 
 .timeline-body {

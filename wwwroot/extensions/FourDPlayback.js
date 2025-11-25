@@ -46,7 +46,7 @@ class FourDPlayback extends Autodesk.Viewing.Extension {
     this.viewer.clearThemingColors();
 
     const activeTasks = tasks.filter(
-      (t) => date >= new Date(t.start) && date <= new Date(t.end)
+      (t) => date >= new Date(t.start)
     );
 
     activeTasks.forEach((t) => {
